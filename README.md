@@ -46,3 +46,8 @@ You can use `-h` or `--help` to see the different options:
 ```
 poetry run batch_nmf -h
 ```
+
+
+```
+poetry run batch_nmf fit --input_matrix test_data/test.tsv --signature_file tmp_sigs.tsv --exposure_file tmp_exp.tsv --batch_file batch_file.tsv --n_restarts 1 --filter_file tmp_filt.tsv --weighted_loss
+```
