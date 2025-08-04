@@ -1,10 +1,9 @@
-# pytorch-nmf
-
-Train NMF (and extensions of NMF) using pytorch
+# batch_NMF
+pytorch implementation of NMF extentions that incorporate batch effects including Batch NMF(bNMF) and Sigmoid Filter NMF (sfNMF).
 
 ## Requirements
 
-pytorch-nmf requires Python 3.9 or above.
+batch_nmf requires Python 3.9 or above.
 
 ## Development:
 
@@ -22,12 +21,12 @@ poetry install
 
 poetry creates a virtual environment so that the current project is isolated from the rest of the system. To run a command in the poetry virtual environment you type `poetry run {command}`. So to run the bbq tool you can type:
 ```
-poetry run pytorch-nmf
+poetry run batch_nmf
 ```
 This only works if you are in the current directory. If you want to run the code from a different directory you can first make sure that the current version is installed in the poetry environment by running `poetry install` and then using the `which` command to get the full path of the installed version:
 ```
 poetry install
-poetry run which pytorch-nmf
+poetry run which batch_nmf
 ```
 That will return a full path to an executable that can be run from any directory.
 
@@ -45,5 +44,5 @@ poetry will then find a version of numpy that fits with the requirements of othe
 
 You can use `-h` or `--help` to see the different options:
 ```
-poetry run pytorch-nmf -h
+poetry run batch_nmf -h
 ```
