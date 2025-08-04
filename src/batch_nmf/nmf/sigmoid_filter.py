@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 import torch.nn as nn
-from pytorch_nmf.nmf.base import baseNMF
+from batch_nmf.nmf.base import baseNMF
 
 class sigmoidfilterNMF(baseNMF):
     def __init__(

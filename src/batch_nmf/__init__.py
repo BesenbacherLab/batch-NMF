@@ -1,5 +1,5 @@
 """
-pytorch-nmf package.
+batch-nmf package.
 
 Train NMF (and extensions of NMF) using pytorch
 """

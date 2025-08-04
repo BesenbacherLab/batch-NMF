@@ -11,7 +11,7 @@ class batchNMF(baseNMF):
         n_signatures=2,
         H=None,
         F=None,
-        filter_regularization=0.0,
+        filter_regularization=-1,
         scaler_regularization=-1,
         volume_regularization=-1,
     ):

@@ -21,8 +21,8 @@ def print_vec_diff(name, X, Y):
 def get_best_model(
     model, 
     target, 
-    best_loss,
-    best_loss_np,
+    best_loss_wp, #best loss sofar with penalty
+    best_loss_np, #best loss sofar without penalty
     best_model,
     loss_fn,
     traintype,
@@ -34,7 +34,7 @@ def get_best_model(
     log_input = False):
     
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=0)
-    patience = 5000
+    patience = 1000
     factor = 0.90
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience = patience, factor = factor, verbose=True)
 
@@ -47,7 +47,16 @@ def get_best_model(
             loss = loss_fn(Y_.log(), target)
         else:
             loss = loss_fn(Y_, target)
-        loss_np = float(loss)
+
+        loss_np = loss.item() # loss without penalty
+        #loss_np = loss.cpu().detach().numpy()
+        
+        #if loss_np < 0:
+        #    print("Loss is negative, resetting to 0.0")
+        #    print_vec_diff("Y_", Y_.cpu().detach().numpy(), target.cpu().detach().numpy())
+        #    print(Y_.cpu().detach().numpy().sum(1, keepdims=True))
+        #    print(target.cpu().detach().numpy().sum(1, keepdims=True))
+        #    assert loss_np >= 0, "Loss should not be negative"
 
         if hasattr(model, "get_penalty") and not model.predict:
             penalty = model.get_penalty()
@@ -55,18 +64,18 @@ def get_best_model(
         else:
             penalty = 0.0
 
-        float_loss = float(loss)
-        if float_loss < best_loss:
+        loss_wp = loss.item() # loss with penalty
+        if loss_wp < best_loss_wp:
             best_model = deepcopy(model.state_dict())
-            best_loss = float_loss
+            best_loss_wp = loss_wp
             best_loss_np = loss_np
 
         if(epoch%5000==1) and verbosity>1:
-            print(epoch, float_loss, best_loss, loss_np, best_loss_np, penalty, scheduler._last_lr)#, rs.max(), ((rs-1.0)**2).mean())
+            print(epoch, loss_wp, loss_np, best_loss_wp, best_loss_np, penalty, scheduler._last_lr)
 
         if(epoch%5000==1) and not logfile is None:
             current_time = time.time() - start_time
-            print(model.name, lr, traintype, epoch, best_loss, float_loss, best_loss_np, loss_np, penalty, scheduler._last_lr, current_time, sep="\t", file=logfile)
+            print(model.name, lr, traintype, epoch, loss_wp, loss_np, best_loss_wp, best_loss_np, penalty, scheduler._last_lr, current_time, sep="\t", file=logfile)
             logfile.flush()
 
         loss.backward(retain_graph=False)
@@ -75,7 +84,7 @@ def get_best_model(
         if scheduler._last_lr[0] < min_lr_rate:
             break
 
-    return best_model, best_loss, best_loss_np
+    return best_model, best_loss_wp, best_loss_np
 
 def make_weighted_loss(weights, criterion):
     weights /= weights.mean()

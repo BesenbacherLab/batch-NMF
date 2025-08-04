@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 import torch.nn as nn
-from batch_nmf.utils import train_model
+from batch_nmf.utils import train_model, MAX_SD
 
 class baseNMF(nn.Module):
     def __init__(self, target, n_signatures=2, H=None, dtype=torch.double, volume_regularization=-1):

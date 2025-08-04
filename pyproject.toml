@@ -3,16 +3,16 @@ requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
-name = "pytorch-nmf"
+name = "batch_nmf"
 version = "0.1.0"
-description = "Train NMF (and extensions of NMF) using pytorch"
+description = "pytorch implementation of NMF extentions that incorporate batch effects including Batch NMF(bNMF) and Sigmoid Filter NMF (sfNMF)."
 authors = ["Søren Besenbacher <besenbacher@clin.au.dk>"]
 license = "MIT License"
 readme = "README.md"
-repository = "https://github.com/besenbacher/pytorch-nmf"
-homepage = "https://github.com/besenbacher/pytorch-nmf"
+repository = "https://github.com/besenbacherLab/batch_NMF"
+homepage = "https://github.com/besenbacherLab/batch_NMF"
 keywords = []
-packages = [ { include = "pytorch_nmf", from = "src" } ]
+packages = [ { include = "batch_nmf", from = "src" } ]
 
 [tool.poetry.dependencies]
 python = ">=3.9,<3.13"
@@ -48,7 +48,7 @@ mkdocs-material = "^6.2.7"
 mkdocstrings = "^0.22.0"
 
 [tool.poetry.scripts]
-pytorch-nmf = "pytorch_nmf.cli:main"
+batch_nmf = "batch_nmf.cli:main"
 
 [tool.black]
 line-length = 120

@@ -19,7 +19,7 @@ poetry install
 
 ### Using poetry to run the software
 
-poetry creates a virtual environment so that the current project is isolated from the rest of the system. To run a command in the poetry virtual environment you type `poetry run {command}`. So to run the bbq tool you can type:
+poetry creates a virtual environment so that the current project is isolated from the rest of the system. To run a command in the poetry virtual environment you type `poetry run {command}`. So to run the batch_nmf tool you can type:
 ```
 poetry run batch_nmf
 ```

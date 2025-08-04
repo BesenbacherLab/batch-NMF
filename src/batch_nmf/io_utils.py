@@ -34,9 +34,7 @@ def read_batch_file(fname, sample_ids):
 def read_matrix(fname):
     row_names = None
     col_names = None
-    if fname.endswith('.txt'):
-        matrix = np.genfromtxt(fname, delimiter=' ', dtype=np.double)
-    elif fname.endswith('.tsv'):
+    if fname.endswith('.tsv'):
         d = pd.read_csv(fname, sep='\t', index_col=0)
         matrix = d.to_numpy(dtype=np.double)
         row_names = d.index
@@ -46,8 +44,6 @@ def read_matrix(fname):
         matrix = d.to_numpy(dtype=np.double)
         row_names = d.index
         col_names = d.columns
-    elif fname.endswith('.npy'):
-        matrix = np.load(fname)
     else:
-        raise Exception("Unknown input_matrix ending. The file name should end on tsv, csv, txt or npy.")
+        raise Exception('Unknown input_matrix ending. The file name should end on ".tsv" or ".csv".')
     return matrix, row_names, col_names
