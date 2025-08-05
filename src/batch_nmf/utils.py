@@ -117,7 +117,7 @@ def train_model(
         assert not model.B is None, "model needs batch matrix for weighted_loss to work"
         weights = model.B @ model.B.sum(axis=0)    
     else:
-        weights = model.B.sum(axis=1)
+        weights = torch.ones(model.n_samples, dtype=model.dtype, device=model.device)
 
     loss_fn = make_weighted_loss(weights, criterion(reduction='none')) 
 
