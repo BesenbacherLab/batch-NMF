@@ -58,7 +58,7 @@ def get_parser():
                         choices=['bNMF', 'sfNMF', 'scipy'])
     parser.add_argument('--n_epochs', type=int, default = 50000)
     parser.add_argument('--learning_rate', type=float, default = 0.5)
-    parser.add_argument('--n_restarts', type=int, default = 4)
+    parser.add_argument('--n_restarts', type=int, default = 4)  
     parser.add_argument('--filter_regularization', type=float, default=-1)
     parser.add_argument('--scaler_regularization', type=float, default=-1)
     parser.add_argument('--volume_regularization', type=float, default=-1)
@@ -90,6 +90,10 @@ def main(args = None):
         An exit code.
     """
     parser = get_parser()
+    if args is None or args == []:
+        parser.print_help()
+        return 0
+
     opts = parser.parse_args(args=args)
     
     if opts.command is None:
