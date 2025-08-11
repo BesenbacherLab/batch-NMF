@@ -91,6 +91,7 @@ def main(args = None):
     """
     parser = get_parser()
     if args is None or args == []:
+        print("Use --help to see available options.")
         parser.print_help()
         return 0
 
