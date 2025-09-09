@@ -56,10 +56,10 @@ class baseNMF(nn.Module):
         else:
             return torch.tensor(0.0, device=self.device) #0.0 #self.zero
 
-    def fit(self, n_epochs=40000, logfile=None, lr=0.1, restarts = 4, vrgrid=False, loss='frobenius', weighted_loss=False):
+    def fit(self, n_epochs=40000, logfile=None, lr=0.1, restarts = 4, vrgrid=False, loss='frobenius', weighted_loss=False, min_lr_rate=1e-5):
         if not vrgrid:
             return train_model(
-                self, self.X, n_epochs=n_epochs, logfile=logfile, lr=lr, restarts=restarts, loss=loss, weighted_loss=weighted_loss,
+                self, self.X, n_epochs=n_epochs, logfile=logfile, lr=lr, restarts=restarts, loss=loss, weighted_loss=weighted_loss, min_lr_rate=min_lr_rate,
             )
         else:
             return self.fit_grid(n_epochs = n_epochs, logfile = logfile, lr =lr, restarts = restarts, loss=loss, weighted_loss=weighted_loss)

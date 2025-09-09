@@ -26,9 +26,11 @@ class batchNMF(baseNMF):
             self.F = torch.tensor(F, dtype=self.dtype, device=self.device)
         else:
             self.knownF = False
-
-        self.F_shape = (self.n_batch - 1, self.n_types)
-        self.first_row_F = torch.ones((1, self.n_types), dtype=self.dtype, device=self.device)
+        if self.predict:
+            self.F_shape = (self.n_batch, self.n_types)
+        else:
+            self.F_shape = (self.n_batch - 1, self.n_types)
+            self.first_row_F = torch.ones((1, self.n_types), dtype=self.dtype, device=self.device)
         self.F_trans = torch.exp
         self.rand_init()
         
