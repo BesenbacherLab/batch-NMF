@@ -1,11 +1,39 @@
-# batch_NMF
+# batch-NMF
 pytorch implementation of NMF extentions that incorporate batch effects including Batch NMF(bNMF) and Sigmoid Filter NMF (sfNMF).
 
 ## Requirements
 
-batch_nmf requires Python 3.9 or above.
+batch-nmf requires Python 3.9 or above.
 
-## Development:
+## Installation
+
+kmerPaPa can be installed using pip:
+```
+pip install batch-nmf
+```
+
+or using pipx:
+```
+pipx install batch-nmf
+```
+
+## Usage
+
+You can use `-h` or `--help` to see the different options:
+```
+batch-nmf -h
+```
+
+The program has two main commands "fit" and "predict". "fit" is used to learn both a set of signatures and their weights from an input matrix. "predict" uses a known set of signatures and infers their weight from the input matrix.
+
+The following command will fit a bNMF model to the input matrix in the test_data directory:
+
+```
+batch-nmf fit --input_matrix test_data/length_data.tsv --batch_file test_data/batch_file.tsv --exposure_file test_data/estimated_exposures_bNMF_2sigs.tsv --signature test_data/estimated_signatures_bNMF_2sigs.tsv --n_signatures 2 --filter_file test_data/estimated_filters_bNMF_2sigs.tsv
+```
+
+
+## Development
 
 For development we use [poetry](https://python-poetry.org) to handle dependencies.
 If poetry is not installed on your system you can install poetry using pipx:
@@ -26,10 +54,9 @@ poetry run batch_nmf
 This only works if you are in the current directory. If you want to run the code from a different directory you can first make sure that the current version is installed in the poetry environment by running `poetry install` and then using the `which` command to get the full path of the installed version:
 ```
 poetry install
-poetry run which batch_nmf
+poetry run which batch-nmf
 ```
 That will return a full path to an executable that can be run from any directory.
-
 
 ### Using poetry to add dependencies
 
@@ -40,14 +67,3 @@ poetry add numpy
 poetry will then find a version of numpy that fits with the requirements of other packages and install it.
 
 
-### Usage
-
-You can use `-h` or `--help` to see the different options:
-```
-poetry run batch_nmf -h
-```
-
-
-```
-poetry run batch_nmf fit --input_matrix test_data/test.tsv --signature_file tmp_sigs.tsv --exposure_file tmp_exp.tsv --batch_file batch_file.tsv --n_restarts 1 --filter_file tmp_filt.tsv --weighted_loss
-```

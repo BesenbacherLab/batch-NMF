@@ -18,7 +18,7 @@ def get_parser():
         An argparse parser.
     """
     parser = argparse.ArgumentParser(
-        prog="batch_nmf",
+        prog="batch-nmf",
         description='''
         pytorch implementation of NMF extentions that incorporate batch effects including Batch NMF(bNMF) and Sigmoid Filter NMF (sfNMF).
         ''')
@@ -71,7 +71,7 @@ def get_parser():
     parser.add_argument('--weighted_loss', action='store_true',
                         help = 'Each batch contributete equally to loss')
     parser.add_argument('--vrgrid', action='store_true',
-                            help = 'Use grid search to set best volume regularization parameter')
+                            help = '(EXPERIMENTAL) Use grid search to set best volume regularization parameter')
 
     return parser
 
@@ -90,13 +90,14 @@ def main(args = None):
         An exit code.
     """
     parser = get_parser()
-    if args is None or args == []:
-        print("Use --help to see available options.")
-        parser.print_help()
-        return 0
+    #print(args)
+    #if args is None or args == []:
+    #    print("Use --help to see available options.")
+    #    parser.print_help()
+    #    return 0
 
     opts = parser.parse_args(args=args)
-    
+    print(opts)
     if opts.command is None:
         parser.print_help()
         return 0
