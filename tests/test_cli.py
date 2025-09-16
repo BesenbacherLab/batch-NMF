@@ -20,4 +20,4 @@ def test_show_help(capsys):
     with pytest.raises(SystemExit):
         cli.main(["-h"])
     captured = capsys.readouterr()
-    assert "batch_nmf" in captured.out
+    assert "batch-nmf" in captured.out

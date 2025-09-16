@@ -7,7 +7,7 @@ batch-nmf requires Python 3.9 or above.
 
 ## Installation
 
-kmerPaPa can be installed using pip:
+batch-nmf can be installed using pip:
 ```
 pip install batch-nmf
 ```
@@ -31,7 +31,7 @@ The following command will fit a bNMF model to the input matrix in the test_data
 ```
 batch-nmf fit --input_matrix test_data/length_data.tsv --batch_file test_data/batch_file.tsv --exposure_file test_data/estimated_exposures_bNMF_2sigs.tsv --signature test_data/estimated_signatures_bNMF_2sigs.tsv --n_signatures 2 --filter_file test_data/estimated_filters_bNMF_2sigs.tsv
 ```
-
+Running this will take 1-2 minutes on a normal labtop. If you need to fit a bNMF or sfNMF model to large datasets with hundreds of samples we recommend running it on a GPU to limit the running time.
 
 ## Development
 
