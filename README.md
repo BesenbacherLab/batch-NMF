@@ -11,7 +11,7 @@ To get batch-nmf and test_data to test run it on, you can first clone the repo:
 ```
 git clone https://github.com/BesenbacherLab/batch-NMF.git
 ```
-Go to the directory:
+then go to the directory:
 ```
 cd batch-NMF
 ```
@@ -47,7 +47,7 @@ The estimated signatures and filters can be plotted using the script `R_script/p
 Running this script requires that R is installed as well as the R package "tidyverse". If R is not installed on your system it can be installed together with the necessary libraries using conda:
 ```
 conda create -n R
-conda acrivate R
+conda activate R
 conda install -c conda-forge r-tidyverse
 ```
 
