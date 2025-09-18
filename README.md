@@ -7,14 +7,22 @@ batch-nmf requires Python 3.9 or above.
 
 ## Installation
 
-batch-nmf can be installed using pip:
+To get batch-nmf and test_data to test run it on, you can first clone the repo:
 ```
-pip install batch-nmf
+git clone https://github.com/BesenbacherLab/batch-NMF.git
+```
+Go to the directory:
+```
+cd batch-NMF
+```
+The command line tool can then be installed using pip:
+```
+pip install dist/batch_nmf-0.1.0-py3-none-any.whl
 ```
 
 or using pipx:
 ```
-pipx install batch-nmf
+pipx install dist/batch_nmf-0.1.0-py3-none-any.whl
 ```
 
 ## Usage
@@ -32,6 +40,25 @@ The following command will fit a bNMF model to the input matrix in the test_data
 batch-nmf fit --input_matrix test_data/length_data.tsv --batch_file test_data/batch_file.tsv --exposure_file test_data/estimated_exposures_bNMF_2sigs.tsv --signature test_data/estimated_signatures_bNMF_2sigs.tsv --n_signatures 2 --filter_file test_data/estimated_filters_bNMF_2sigs.tsv
 ```
 Running this will take 1-2 minutes on a normal labtop. If you need to fit a bNMF or sfNMF model to large datasets with hundreds of samples we recommend running it on a GPU to limit the running time.
+
+## Plotting output
+The estimated signatures and filters can be plotted using the script `R_script/plot_lengths.R`. 
+
+Running this script requires that R is installed as well as the R package "tidyverse". If R is not installed on your system it can be installed together with the necessary libraries using conda:
+```
+conda create -n R
+conda acrivate R
+conda install -c conda-forge r-tidyverse
+```
+
+The script can be used like this to produce a plot of the signatures:
+```
+./R_scripts/plot_lengths.R test_data/estimated_signatures_bNMF_2sigs.tsv signatures_bNMF_2sigs.png
+```
+And a plot of the estimated filters:
+```
+./R_scripts/plot_lengths.R test_data/estimated_filters_bNMF_2sigs.tsv filters_bNMF_2sigs.png
+```
 
 ## Development
 
