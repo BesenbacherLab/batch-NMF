@@ -58,6 +58,8 @@ def get_parser():
                         choices=['bNMF', 'sfNMF', 'scipy'])
     parser.add_argument('--n_epochs', type=int, default = 50000)
     parser.add_argument('--learning_rate', type=float, default = 0.5)
+    parser.add_argument('--min_learning_rate', type=float, default = 1e-4)
+    parser.add_argument('--lr_decrease_factor', type=float, default = 0.80)
     parser.add_argument('--n_restarts', type=int, default = 4)  
     parser.add_argument('--filter_regularization', type=float, default=-1)
     parser.add_argument('--scaler_regularization', type=float, default=-1)
@@ -150,6 +152,8 @@ def main(args = None):
                     vrgrid = opts.vrgrid,
                     loss = opts.loss,
                     weighted_loss = opts.weighted_loss,
+                    min_lr_rate = opts.min_learning_rate,
+                    lr_decrease_factor = opts.lr_decrease_factor,
                     )
                 W_est, H_est, F_est = res
                 print_tsv(F_est, opts.filter_file, batch_names, col_names, "batch_id")
@@ -173,6 +177,8 @@ def main(args = None):
                     vrgrid = opts.vrgrid,
                     loss = opts.loss,
                     weighted_loss = opts.weighted_loss,
+                    min_lr_rate = opts.min_learning_rate,
+                    lr_decrease_factor = opts.lr_decrease_factor,
                     )
                 W_est, H_est, F_est = res
                 print_tsv(F_est, opts.filter_file, batch_names, col_names, "batch_id")
@@ -222,6 +228,8 @@ def main(args = None):
                     restarts = opts.n_restarts,
                     loss = opts.loss,
                     weighted_loss = opts.weighted_loss,
+                    min_lr_rate = opts.min_learning_rate,
+                    lr_decrease_factor = opts.lr_decrease_factor,
                 )
                     
                 W_est, F_est = res
@@ -245,7 +253,9 @@ def main(args = None):
                     vrgrid = opts.vrgrid,
                     loss = opts.loss,
                     weighted_loss = opts.weighted_loss,
-                    )
+                    min_lr_rate = opts.min_learning_rate,
+                    lr_decrease_factor = opts.lr_decrease_factor,
+                )
                 W_est, F_est = res
                 print_tsv(F_est, opts.filter_file, batch_names, col_names, "batch_id")
 

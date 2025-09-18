@@ -31,12 +31,12 @@ def get_best_model(
     logfile=None, 
     verbosity = 2,
     min_lr_rate = 1e-5,
+    lr_decrease_factor = 0.90,
     log_input = False):
     
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=0)
     patience = 1000
-    factor = 0.90
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience = patience, factor = factor, verbose=True)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience = patience, factor = lr_decrease_factor)
 
     if not logfile is None:
         start_time = time.time()
@@ -49,7 +49,6 @@ def get_best_model(
             loss = loss_fn(Y_, target)
 
         loss_np = loss.item() # loss without penalty
-        #loss_np = loss.cpu().detach().numpy()
         
         #if loss_np < 0:
         #    print("Loss is negative, resetting to 0.0")
@@ -104,6 +103,7 @@ def train_model(
     logfile=None,
     verbosity = 2,
     min_lr_rate = 1e-4,
+    lr_decrease_factor = 0.90,
     loss = 'frobenius',
     weighted_loss = False):
 
@@ -143,6 +143,7 @@ def train_model(
                 logfile = logfile, 
                 verbosity = verbosity,
                 min_lr_rate = min_lr_rate,
+                lr_decrease_factor = lr_decrease_factor,
                 log_input = loss == 'kullback-leibler')
         model.rand_init()
 
@@ -163,6 +164,7 @@ def train_model(
             logfile = logfile, 
             verbosity = verbosity,
             min_lr_rate = min_lr_rate,
+            lr_decrease_factor = lr_decrease_factor,
             log_input = loss == 'kullback-leibler')
 
     model.load_state_dict(best_model)
