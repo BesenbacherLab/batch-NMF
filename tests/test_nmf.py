@@ -289,3 +289,19 @@ def test_batchNMF_predict():
 #     assert_allclose(Y, Y_est)
 
 
+
+
+def test_sigmoidfilterNMF_lengths():
+    X = np.random.default_rng(0).random((4, 12)) + 0.1
+    X = X / X.sum(1, keepdims=True)
+    B = np.ones((4, 1))
+    # default: consecutive lengths starting at min_length
+    assert_allclose(sigmoidfilterNMF(X, B, 2).bp.numpy(), np.arange(80, 92))
+    assert_allclose(sigmoidfilterNMF(X, B, 2, min_length=100).bp.numpy(), np.arange(100, 112))
+    # explicit lengths win over min_length
+    lengths = np.arange(100, 124, 2)
+    m = sigmoidfilterNMF(X, B, 2, min_length=30, lengths=lengths)
+    assert_allclose(m.bp.numpy(), lengths)
+    assert m.get_F().shape == (1, 12)
+    with pytest.raises(AssertionError):
+        sigmoidfilterNMF(X, B, 2, lengths=np.arange(100, 105))

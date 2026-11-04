@@ -1,7 +1,9 @@
 import torch
 import numpy as np
 import torch.nn as nn
-from batch_nmf.utils import train_model, MAX_SD
+from batch_nmf.utils import (
+    train_model, write_log_header, MAX_SD, DEFAULT_RESTART_EPOCHS, DEFAULT_TOL, DEFAULT_CHECK_EVERY,
+)
 
 class baseNMF(nn.Module):
     def __init__(self, target, n_signatures=2, H=None, dtype=torch.double, volume_regularization=-1):
@@ -56,18 +58,31 @@ class baseNMF(nn.Module):
         else:
             return torch.tensor(0.0, device=self.device) #0.0 #self.zero
 
-    def fit(self, n_epochs=40000, logfile=None, lr=0.1, restarts = 4, vrgrid=False, loss='frobenius', weighted_loss=False, min_lr_rate=1e-5, lr_decrease_factor=0.90):
+    def fit(self, n_epochs=40000, logfile=None, lr=0.1, restarts = 4, vrgrid=False, loss='frobenius', weighted_loss=False, min_lr_rate=1e-5, lr_decrease_factor=0.90,
+            n_epochs_restart=DEFAULT_RESTART_EPOCHS, tol=DEFAULT_TOL, check_every=DEFAULT_CHECK_EVERY):
+        """Fit the model.
+
+        Runs `restarts` random starts of at most `n_epochs_restart` epochs each and then a
+        final run of at most `n_epochs` epochs from the best start. A run stops early once no
+        fitted value changes by more than `tol` over `check_every` epochs (`tol=0` disables this).
+        """
         if not vrgrid:
+            write_log_header(logfile)
             return train_model(
-                self, self.X, n_epochs=n_epochs, logfile=logfile, lr=lr, restarts=restarts, loss=loss, weighted_loss=weighted_loss, min_lr_rate=min_lr_rate, lr_decrease_factor=lr_decrease_factor
+                self, self.X, n_epochs=n_epochs, logfile=logfile, lr=lr, restarts=restarts, loss=loss, weighted_loss=weighted_loss, min_lr_rate=min_lr_rate, lr_decrease_factor=lr_decrease_factor,
+                n_epochs_restart=n_epochs_restart, tol=tol, check_every=check_every,
             )
         else:
-            return self.fit_grid(n_epochs = n_epochs, logfile = logfile, lr =lr, restarts = restarts, loss=loss, weighted_loss=weighted_loss)
+            return self.fit_grid(n_epochs = n_epochs, logfile = logfile, lr =lr, restarts = restarts, loss=loss, weighted_loss=weighted_loss,
+                                 n_epochs_restart=n_epochs_restart, tol=tol, check_every=check_every)
     
-    def fit_grid(self, n_epochs=40000, logfile=None, lr=0.1, restarts = 1, vr_grid =None, loss='frobenius', weighted_loss=False, rel_cutoff=1.001):
+    def fit_grid(self, n_epochs=40000, logfile=None, lr=0.1, restarts = 1, vr_grid =None, loss='frobenius', weighted_loss=False, rel_cutoff=1.001,
+                 n_epochs_restart=DEFAULT_RESTART_EPOCHS, tol=DEFAULT_TOL, check_every=DEFAULT_CHECK_EVERY):
+        write_log_header(logfile)
         self.volume_regularization = 0.0
         vr0_res, vr0_loss, vr0_loss_np, vr0_penalty = train_model(
-            self, self.X, n_epochs=n_epochs, logfile=logfile, lr=lr, restarts=restarts, verbosity=0, loss=loss, weighted_loss=weighted_loss
+            self, self.X, n_epochs=n_epochs, logfile=logfile, lr=lr, restarts=restarts, verbosity=0, loss=loss, weighted_loss=weighted_loss,
+            n_epochs_restart=n_epochs_restart, tol=tol, check_every=check_every,
         )
 
         best_loss_np = 1e30
@@ -97,7 +112,8 @@ class baseNMF(nn.Module):
             n_epochs2 = max(n_epochs, 40000)
             
             res, vr_loss, vr_loss_np, penalty = train_model(
-                self, self.X, n_epochs=n_epochs2, logfile=logfile, lr=lr/50, restarts=0, verbosity=0, loss=loss, weighted_loss=weighted_loss
+                self, self.X, n_epochs=n_epochs2, logfile=logfile, lr=lr/50, restarts=0, verbosity=0, loss=loss, weighted_loss=weighted_loss,
+                tol=tol, check_every=check_every,
             )
             print('##### VRGRID #####', vr_val, vr_loss, vr_loss_np, penalty)
             print('vr_loss_np', vr_loss_np)

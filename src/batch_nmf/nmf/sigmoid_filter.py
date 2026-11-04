@@ -15,7 +15,14 @@ class sigmoidfilterNMF(baseNMF):
         scaler_regularization=-1,
         volume_regularization=-1,
         min_length=80,
+        lengths=None,
     ):
+        """
+        Arguments:
+            min_length: Fragment length of the first column. The columns are assumed to be
+                consecutive lengths min_length, min_length+1, ... Ignored if `lengths` is given.
+            lengths: Fragment length of each column of `target` (overrides `min_length`).
+        """
         super().__init__(target, n_signatures, H, volume_regularization=volume_regularization)
         self.name = f"sigmoid_filter_NMF"
         self.filter_regularization = filter_regularization
@@ -23,6 +30,13 @@ class sigmoidfilterNMF(baseNMF):
         self.B = torch.tensor(B, dtype=self.dtype, device=self.device)
         self.n_batch = B.shape[1]
         self.min_length = min_length
+        if lengths is None:
+            lengths = np.arange(min_length, min_length + self.n_types)
+        lengths = np.asarray(lengths, dtype=float)
+        assert lengths.shape == (self.n_types,), \
+            f"lengths must have one entry per column of the input ({self.n_types}), got shape {lengths.shape}"
+        assert (lengths > 0).all(), "fragment lengths must be positive"
+        self.bp = torch.tensor(lengths, dtype=self.dtype, device=self.device)
 
         if not F is None:
             self.knownF = True
@@ -52,7 +66,7 @@ class sigmoidfilterNMF(baseNMF):
             return self.F
         else:
             F = torch.ones(self.F_shape, dtype=self.dtype, device=self.device)
-            bp = torch.arange(self.min_length, self.min_length + self.n_types, dtype=self.dtype, device=self.device)
+            bp = self.bp
             
             #apply decreasing sigmoid
             H = self.DS_trans(self.DS1)*10
