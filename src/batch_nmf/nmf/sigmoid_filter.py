@@ -1,3 +1,5 @@
+import warnings
+
 import torch
 import numpy as np
 import torch.nn as nn
@@ -19,13 +21,21 @@ class sigmoidfilterNMF(baseNMF):
     ):
         """
         Arguments:
+            filter_regularization: Not used. The smoothness penalty of bNMF has no effect on
+                sigmoid filters, which are smooth already; a positive value gives a warning.
             min_length: Fragment length of the first column. The columns are assumed to be
                 consecutive lengths min_length, min_length+1, ... Ignored if `lengths` is given.
             lengths: Fragment length of each column of `target` (overrides `min_length`).
         """
         super().__init__(target, n_signatures, H, volume_regularization=volume_regularization)
         self.name = f"sigmoid_filter_NMF"
-        self.filter_regularization = filter_regularization
+        if filter_regularization > 0:
+            warnings.warn(
+                "filter_regularization has no effect for sfNMF (the sigmoid filters are already smooth) "
+                "and is ignored.",
+                UserWarning,
+                stacklevel=2,
+            )
         self.scaler_regularization = scaler_regularization
         self.B = torch.tensor(B, dtype=self.dtype, device=self.device)
         self.n_batch = B.shape[1]
@@ -86,8 +96,6 @@ class sigmoidfilterNMF(baseNMF):
         penalty = super().get_penalty()
         if self.scaler_regularization > 0:
             penalty += self.scaler_regularization * torch.nn.functional.relu(self.row_sum.max() - 1.0)
-        if self.filter_regularization > 0:
-            penalty += self.filter_regularization * (torch.diff(self.F_trans(self.F), dim=1, n=1) ** 2).mean()
         return penalty
 
     def forward(self):

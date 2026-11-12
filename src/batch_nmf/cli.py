@@ -77,7 +77,10 @@ def get_parser():
                         help='Seed for the random initialisations, so that a run can be repeated exactly '
                         '(same input, options, software versions and number of CPU threads). '
                         'Default: no seed, so every run starts from different random values.')
-    parser.add_argument('--filter_regularization', type=float, default=-1)
+    parser.add_argument('--filter_regularization', type=float, default=-1,
+                        help='(bNMF only) Penalty on differences between the filter values of neighbouring '
+                        'fragment lengths, which makes the bNMF filters smoother. Has no effect for sfNMF. '
+                        'Default is -1 (off).')
     parser.add_argument('--scaler_regularization', type=float, default=-1)
     parser.add_argument('--volume_regularization', type=float, default=-1)
     parser.add_argument('--min_length', type=int, default=None,
