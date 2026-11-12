@@ -10,16 +10,19 @@ Subcommands
 simulate  Generate one dataset. --npz writes everything `run --data` needs to one file;
           --out_dir writes batch-nmf input files plus the ground truth as TSV files.
 run       Fit the methods to one dataset (simulated from the options, or read with --data)
-          and write one TSV of evaluation metrics.
+          and write one TSV of evaluation metrics. --fits also saves the fitted parameters.
+evaluate  Recompute the metrics from a dataset and saved fits, without refitting (e.g. after
+          changing a metric, --tie_tol or --jsd_min_filter).
 
 The full simulation design (all experiments and replicates) is the gwf workflow
-utils/simulation_workflow.py, which calls `simulate --npz` and `run --data`.
+utils/simulation_workflow.py, which calls `simulate --npz` and `run --data --fits`.
 
 Examples (from the repository root)::
 
     uv run python utils/simulate.py run --replicate 1 --out results/base_rep1.tsv
     uv run python utils/simulate.py simulate --replicate 1 --npz sim/base_rep1.npz
-    uv run python utils/simulate.py run --data sim/base_rep1.npz --methods sfnmf --out results/base_rep1_sfnmf.tsv
+    uv run python utils/simulate.py run --data sim/base_rep1.npz --methods sfnmf --out res/sfnmf.tsv --fits res/sfnmf.npz
+    uv run python utils/simulate.py evaluate --data sim/base_rep1.npz --fits res/sfnmf.npz --tie_tol 1e-3 --out res/sfnmf_b.tsv
     uv run python utils/simulate.py simulate --replicate 1 --out_dir sim_data
 
 Generative model
@@ -80,7 +83,10 @@ Estimated signatures are matched to the true ones by the Hungarian algorithm on 
 similarity.
 
 kl_loss          mean KL(x_i || reconstruction_i) on the evaluated samples
-w_mae, w_rmse    error of the weights
+w_tvd            mean per-sample total variation distance, 1/2 sum_c |w_ic - w_true_ic|: the share
+                 of a sample's composition assigned to the wrong signatures (0-1). Unlike w_mae
+                 it does not shrink with the number of signatures; use it as the main weight error.
+w_mae, w_rmse    error of the weights (averaged over all sample x signature entries)
 w_r2             1 - SSE / SST of the weights (SST around the column means)
 tumor_w_mae      error of the tumour-signature weight
 tumor_auc        AUC of the tumour-signature weight for cases vs controls
@@ -90,8 +96,12 @@ filter_log_rmse  RMSE of log(F_k / F_0) vs the truth, after removing each batch'
                  level (not identified) and weighting lengths by fragment mass. For nmf and
                  plain (no filters) this is the error of assuming there is no batch effect.
 corrected_jsd    mean JSD between the observed profile mapped into the reference batch
-                 (x_i / F_k * F_0, renormalised) and the true unfiltered profile W_i H
+                 (x_i / F_k * F_0) and the true unfiltered profile W_i H, both restricted to the
+                 lengths where the true filter keeps >= --jsd_min_filter of its maximum (relative
+                 to the reference batch) and renormalised. Without this restriction, dividing by a
+                 filter close to 0 lets a few lengths with no information dominate.
 n_tied_starts    number of starts whose loss is within --tie_tol (relative) of the best
+spread_w_tvd     largest weight TVD between the best start and a tied start
 spread_w_mae     largest weight MAE between the best start and a tied start
 spread_h_cos     smallest signature cosine similarity between the best start and a tied start
 runtime_s        seconds used by the fits
@@ -195,7 +205,6 @@ def add_fit_args(p: argparse.ArgumentParser) -> None:
     g.add_argument("--volume_regularization", type=float, default=-1, help="Passed to plain/bnmf/sfnmf.")
     g.add_argument("--sklearn_max_iter", type=int, default=100000)
     g.add_argument("--sklearn_tol", type=float, default=1e-9)
-    g.add_argument("--tie_tol", type=float, default=1e-6, help="Relative loss difference counted as a tie between starts.")
     g.add_argument("--test_chunk_sizes", type=str, default="50",
                    help="The test batch is split into chunks of these sizes; each chunk is analysed independently.")
     g.add_argument("--max_test_chunks", type=int, default=0,
@@ -204,6 +213,16 @@ def add_fit_args(p: argparse.ArgumentParser) -> None:
     g.add_argument("--predict_restarts", type=int, default=0, help="Random restarts when inferring test weights.")
     g.add_argument("--predict_n_epochs", type=int, default=20000, help="Maximum epochs when inferring test weights.")
     g.add_argument("--verbose", action="store_true", help="Show the output of the fitting routines.")
+
+
+def add_eval_args(p: argparse.ArgumentParser) -> None:
+    g = p.add_argument_group("evaluation")
+    g.add_argument("--tie_tol", type=float, default=1e-6,
+                   help="Relative loss difference counted as a tie between starts (n_tied_starts, spread_*).")
+    g.add_argument("--jsd_min_filter", type=float, default=0.01,
+                   help="corrected_jsd only compares lengths where the true filter (relative to the reference "
+                        "batch) keeps at least this fraction of its maximum. Elsewhere almost no fragments are "
+                        "observed, and dividing by the filter would mostly amplify noise and the pseudo-count.")
 
 
 def get_parser() -> argparse.ArgumentParser:
@@ -220,10 +239,20 @@ def get_parser() -> argparse.ArgumentParser:
                            formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     add_scenario_args(p_run)
     add_fit_args(p_run)
+    add_eval_args(p_run)
     p_run.add_argument("--data", type=str, default=None,
                        help="Dataset written by `simulate --npz`. If given, the design, signature, filter and "
                             "count options are ignored and taken from the file.")
     p_run.add_argument("--out", type=str, required=True, help="Output TSV.")
+    p_run.add_argument("--fits", type=str, default=None,
+                       help="Also save the fitted parameters (all starts, and the test-batch weights and filters) "
+                            "to this .npz file, so `evaluate` can recompute the metrics without refitting.")
+    p_eval = sub.add_parser("evaluate", help="Recompute the metrics from a dataset and saved fits; write one TSV.",
+                            formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    add_eval_args(p_eval)
+    p_eval.add_argument("--data", type=str, required=True, help="Dataset written by `simulate --npz`.")
+    p_eval.add_argument("--fits", type=str, required=True, help="Fits written by `run --fits`.")
+    p_eval.add_argument("--out", type=str, required=True, help="Output TSV.")
     return parser
 
 
@@ -534,7 +563,7 @@ def match_signatures(H_true, H_est):
 def w_metrics(W_true, W_est, tumor_idx) -> dict:
     err = W_est - W_true
     sst = np.sum((W_true - W_true.mean(axis=0)) ** 2)
-    return dict(w_mae=np.abs(err).mean(), w_rmse=np.sqrt((err**2).mean()),
+    return dict(w_tvd=0.5 * np.abs(err).sum(axis=1).mean(), w_mae=np.abs(err).mean(), w_rmse=np.sqrt((err**2).mean()),
                 w_r2=1 - np.sum(err**2) / sst if sst > 0 else np.nan,
                 tumor_w_mae=np.abs(err[:, tumor_idx]).mean())
 
@@ -553,16 +582,86 @@ def filter_log_rmse(r_est, r_true, weights) -> float:
     return float(np.sqrt(np.sum(w * d**2)))
 
 
-def corrected_jsd(X, F_rows_est, f0_est, P_true_ref) -> float:
-    corrected = rownorm(X / F_rows_est * f0_est)
-    return float(np.mean(jsd(corrected, P_true_ref)))
+def retained_lengths(F_true, batch, min_filter) -> np.ndarray:
+    """Per sample: the lengths where its batch's true filter, relative to the reference batch,
+    keeps at least `min_filter` of its maximum."""
+    rel = F_true / F_true[0]
+    keep = rel >= min_filter * rel.max(axis=1, keepdims=True)
+    return keep[batch]
 
 
-def evaluate_train(fit, sim, n_fit) -> dict:
+def corrected_jsd(X, F_rows_est, f0_est, P_true_ref, keep) -> float:
+    """Mean JSD between each observed profile mapped into the reference batch (x / F_k * F_0) and its
+    true unfiltered profile, both restricted to the lengths in `keep` and renormalised."""
+    corrected = rownorm(X / F_rows_est * f0_est * keep)
+    truth = rownorm(P_true_ref * keep)
+    return float(np.mean(jsd(corrected, truth)))
+
+
+def spread(starts, best_idx, tie_tol) -> dict:
+    """How different are starts whose loss ties with the best start?"""
+    best = starts[best_idx]
+    tied = [i for i, f in enumerate(starts) if (f["loss"] - best["loss"]) <= tie_tol * abs(best["loss"])]
+    W_b, H_b = to_view(best["W"], best["H"], best["F"][0])
+    w_mae, w_tvd, h_cos = 0.0, 0.0, 1.0
+    for i in tied:
+        if i == best_idx:
+            continue
+        W_f, H_f = to_view(starts[i]["W"], starts[i]["H"], starts[i]["F"][0])
+        perm = match_signatures(H_b, H_f)
+        if None in perm:
+            continue
+        diff = np.abs(W_f[:, perm] - W_b)
+        w_mae = max(w_mae, float(diff.mean()))
+        w_tvd = max(w_tvd, float(0.5 * diff.sum(axis=1).mean()))
+        h_cos = min(h_cos, float(np.min(np.diag(cosine(H_b, H_f[perm])))))
+    return dict(n_tied_starts=len(tied), spread_w_tvd=w_tvd, spread_w_mae=w_mae, spread_h_cos=h_cos)
+
+
+# ---------------------------------------------------------------------------
+# Fitting a method (all starts + test batch) and evaluating saved fits
+# ---------------------------------------------------------------------------
+
+def predict_test(method, best, sim, opts, chunk_size) -> dict | None:
+    """Infer the test-batch weights (and one filter per chunk) with the signatures fixed."""
+    te, K = sim["test"], sim["n_batches"]
+    n_chunks = len(te["X"]) // chunk_size
+    if opts.max_test_chunks > 0:
+        n_chunks = min(n_chunks, opts.max_test_chunks)
+    if n_chunks == 0:
+        return None
+    t0 = time.time()
+    Ws, Fs = [], []
+    for j in range(n_chunks):
+        X = te["X"][j * chunk_size:(j + 1) * chunk_size]
+        W, F = predict_chunk(method, sim, X, best["H"], opts, seed=10_000 * opts.replicate + j, F_true_test=sim["F"][K])
+        Ws.append(W)
+        Fs.append(F)
+    n_eval = n_chunks * chunk_size
+    return dict(idx=np.arange(n_eval), chunk=np.repeat(np.arange(n_chunks), chunk_size), W=np.vstack(Ws),
+                F=np.vstack(Fs), runtime=time.time() - t0)
+
+
+def fit_method(method, sim, opts, n_fit, chunk_sizes) -> dict:
+    """All random starts of `method` on the training data, then test-batch inference with the best start."""
+    t0 = time.time()
+    starts = [fit_train(method, sim, opts, n_fit, seed=1000 * opts.replicate + s) for s in range(opts.n_starts)]
+    train_runtime = time.time() - t0
+    best_idx = int(np.argmin([f["loss"] for f in starts]))
+    tests = {}
+    if sim["test"] is not None:
+        for size in chunk_sizes:
+            pred = predict_test(method, starts[best_idx], sim, opts, size)
+            if pred is not None:
+                tests[size] = pred
+    return dict(method=method, n_fit=n_fit, starts=starts, best=best_idx, train_runtime=train_runtime, tests=tests)
+
+
+def evaluate_train(fit, sim, n_fit, opts) -> tuple[dict, list, int]:
     tr, H_true, tumor = sim["train"], sim["H"], sim["tumor_idx"]
     f0 = fit["F"][0]
     W_v, H_v = to_view(fit["W"], fit["H"], f0)
-    out = dict(kl_loss=fit["loss"], n_samples_eval=len(tr["X"]))
+    out = dict(kl_loss=kl_loss(tr["X"], fit["W"], fit["H"], fit["F"][tr["batch"]]), n_samples_eval=len(tr["X"]))
     perm = match_signatures(H_true, H_v)
     if n_fit == H_true.shape[0]:
         W_m, H_m = W_v[:, perm], H_v[perm]
@@ -581,58 +680,79 @@ def evaluate_train(fit, sim, n_fit) -> dict:
             errs.append(filter_log_rmse(fit["F"][k] / f0, sim["F"][k] / sim["F"][0], tr["P"][idx].mean(axis=0)))
         out["filter_log_rmse"] = float(np.mean(errs))
     P_true_ref = rownorm(tr["W"] @ (H_true * sim["F"][0]))
-    out["corrected_jsd"] = corrected_jsd(tr["X"], fit["F"][tr["batch"]], f0, P_true_ref)
-    out["_perm"], out["_tumor_col"] = perm, tumor_col
-    return out
+    keep = retained_lengths(sim["F"], tr["batch"], opts.jsd_min_filter)
+    out["corrected_jsd"] = corrected_jsd(tr["X"], fit["F"][tr["batch"]], f0, P_true_ref, keep)
+    return out, perm, tumor_col
 
 
-def spread(fits, best, tie_tol, H_true) -> dict:
-    """How different are starts whose loss ties with the best start?"""
-    tied = [f for f in fits if (f["loss"] - best["loss"]) <= tie_tol * abs(best["loss"])]
-    W_b, H_b = to_view(best["W"], best["H"], best["F"][0])
-    w_spread, h_cos = 0.0, 1.0
-    for f in tied:
-        if f is best:
-            continue
-        W_f, H_f = to_view(f["W"], f["H"], f["F"][0])
-        perm = match_signatures(H_b, H_f)
-        if None in perm:
-            continue
-        w_spread = max(w_spread, float(np.abs(W_f[:, perm] - W_b).mean()))
-        h_cos = min(h_cos, float(np.min(np.diag(cosine(H_b, H_f[perm])))))
-    return dict(n_tied_starts=len(tied), spread_w_mae=w_spread, spread_h_cos=h_cos)
-
-
-def evaluate_test(method, best, train_eval, sim, opts, n_fit, chunk_size) -> dict:
+def evaluate_test(pred, best, sim, n_fit, perm, tumor_col, opts) -> dict:
     te, H_true, tumor, K = sim["test"], sim["H"], sim["tumor_idx"], sim["n_batches"]
-    n = len(te["X"])
-    n_chunks = n // chunk_size
-    if opts.max_test_chunks > 0:
-        n_chunks = min(n_chunks, opts.max_test_chunks)
-    if n_chunks == 0:
-        return {}
+    idx, chunk = pred["idx"], pred["chunk"]
     f0 = best["F"][0]
-    W_est, F_est, idx_all, losses, frmse = [], [], [], [], []
-    for j in range(n_chunks):
-        idx = np.arange(j * chunk_size, (j + 1) * chunk_size)
-        X = te["X"][idx]
-        W, F = predict_chunk(method, sim, X, best["H"], opts, seed=10_000 * opts.replicate + j, F_true_test=sim["F"][K])
-        W_est.append(W)
-        F_est.append(np.tile(F, (len(idx), 1)))
-        idx_all.append(idx)
-        losses.append(kl_loss(X, W, best["H"], np.tile(F, (len(idx), 1))) * len(idx))
-        frmse.append(filter_log_rmse(F / f0, sim["F"][K] / sim["F"][0], te["P"][idx].mean(axis=0)))
-    idx = np.concatenate(idx_all)
-    W_est, F_est = np.vstack(W_est), np.vstack(F_est)
-    W_v, _ = to_view(W_est, best["H"], f0)
-    out = dict(kl_loss=float(np.sum(losses) / len(idx)), n_samples_eval=len(idx), filter_log_rmse=float(np.mean(frmse)))
-    perm, tumor_col = train_eval["_perm"], train_eval["_tumor_col"]
+    F_rows = pred["F"][chunk]
+    X = te["X"][idx]
+    frmse = [filter_log_rmse(pred["F"][j] / f0, sim["F"][K] / sim["F"][0], te["P"][idx[chunk == j]].mean(axis=0))
+             for j in range(len(pred["F"]))]
+    W_v, _ = to_view(pred["W"], best["H"], f0)
+    out = dict(kl_loss=kl_loss(X, pred["W"], best["H"], F_rows), n_samples_eval=len(idx),
+               filter_log_rmse=float(np.mean(frmse)))
     if n_fit == H_true.shape[0]:
         out.update(w_metrics(te["W"][idx], W_v[:, perm], tumor))
     out["tumor_auc"] = auc(W_v[:, tumor_col], te["is_case"][idx])
     P_true_ref = rownorm(te["W"][idx] @ (H_true * sim["F"][0]))
-    out["corrected_jsd"] = corrected_jsd(te["X"][idx], F_est, f0, P_true_ref)
+    keep = retained_lengths(sim["F"], np.full(len(idx), K), opts.jsd_min_filter)
+    out["corrected_jsd"] = corrected_jsd(X, F_rows, f0, P_true_ref, keep)
     return out
+
+
+def evaluate_method(fit, sim, opts) -> list[dict]:
+    """Metric rows (train, and test per chunk size) for one fitted method."""
+    best = fit["starts"][fit["best"]]
+    train_eval, perm, tumor_col = evaluate_train(best, sim, fit["n_fit"], opts)
+    rows = [dict(method=fit["method"], set="train", chunk_size=np.nan, **train_eval,
+                 **spread(fit["starts"], fit["best"], opts.tie_tol), runtime_s=fit["train_runtime"])]
+    for size, pred in fit["tests"].items():
+        rows.append(dict(method=fit["method"], set="test", chunk_size=size,
+                         **evaluate_test(pred, best, sim, fit["n_fit"], perm, tumor_col, opts), runtime_s=pred["runtime"]))
+    return rows
+
+
+FIT_OPTION_KEYS = ("n_starts", "n_epochs", "tol", "learning_rate", "lr_decrease_factor", "min_learning_rate",
+                   "volume_regularization", "sklearn_max_iter", "sklearn_tol", "test_chunk_sizes", "max_test_chunks",
+                   "predict_restarts", "predict_n_epochs")
+
+
+def save_fits(fits, path, fit_options) -> None:
+    """Write fitted parameters of one or more methods to one .npz file (input for `evaluate`)."""
+    arrays = {"methods": json.dumps([f["method"] for f in fits]), "fit_options": json.dumps(fit_options)}
+    for f in fits:
+        m = f["method"]
+        arrays.update({
+            f"{m}.n_fit": f["n_fit"], f"{m}.best": f["best"], f"{m}.train_runtime": f["train_runtime"],
+            f"{m}.W": np.stack([s["W"] for s in f["starts"]]), f"{m}.H": np.stack([s["H"] for s in f["starts"]]),
+            f"{m}.F": np.stack([s["F"] for s in f["starts"]]), f"{m}.loss": np.array([s["loss"] for s in f["starts"]]),
+            f"{m}.chunk_sizes": np.array(list(f["tests"]), dtype=int),  # keep the order of --test_chunk_sizes
+        })
+        for size, pred in f["tests"].items():
+            arrays.update({f"{m}.test{size}.{k}": v for k, v in pred.items()})
+    np.savez_compressed(path, **arrays)
+
+
+def load_fits(path) -> tuple[list[dict], dict]:
+    fits = []
+    with np.load(path) as z:
+        fit_options = json.loads(str(z["fit_options"]))
+        for m in json.loads(str(z["methods"])):
+            starts = [dict(W=W, H=H, F=F, loss=float(loss))
+                      for W, H, F, loss in zip(z[f"{m}.W"], z[f"{m}.H"], z[f"{m}.F"], z[f"{m}.loss"])]
+            tests = {}
+            for size in z[f"{m}.chunk_sizes"]:
+                size = int(size)
+                tests[size] = {k: z[f"{m}.test{size}.{k}"] for k in ("idx", "chunk", "W", "F")}
+                tests[size]["runtime"] = float(z[f"{m}.test{size}.runtime"])
+            fits.append(dict(method=m, n_fit=int(z[f"{m}.n_fit"]), starts=starts, best=int(z[f"{m}.best"]),
+                             train_runtime=float(z[f"{m}.train_runtime"]), tests=tests))
+    return fits, fit_options
 
 
 # ---------------------------------------------------------------------------
@@ -641,11 +761,27 @@ def evaluate_test(method, best, train_eval, sim, opts, n_fit, chunk_size) -> dic
 
 SCENARIO_COLUMNS = ("replicate", "n_batches", "n_per_batch", "n_test", "case_fraction", "n_signatures",
                     "signatures", "tumor_periodicity", "alpha", "tumor_fraction", "filter_family", "filter_strength",
-                    "steepness", "sample_filter_sd", "depth", "dm_concentration", "n_signatures_fit", "n_starts",
-                    "volume_regularization")
-METRIC_COLUMNS = ("method", "set", "chunk_size", "n_samples_eval", "kl_loss", "w_mae", "w_rmse", "w_r2", "tumor_w_mae",
-                  "tumor_auc", "h_cos", "h_jsd", "h_rmse", "filter_log_rmse", "corrected_jsd", "n_tied_starts",
-                  "spread_w_mae", "spread_h_cos", "runtime_s")
+                    "steepness", "sample_filter_sd", "depth", "dm_concentration", "pseudo_count", "n_signatures_fit",
+                    "n_starts", "volume_regularization", "tie_tol", "jsd_min_filter")
+METRIC_COLUMNS = ("method", "set", "chunk_size", "n_samples_eval", "kl_loss", "w_tvd", "w_mae", "w_rmse", "w_r2",
+                  "tumor_w_mae", "tumor_auc", "h_cos", "h_jsd", "h_rmse", "filter_log_rmse", "corrected_jsd",
+                  "n_tied_starts", "spread_w_tvd", "spread_w_mae", "spread_h_cos", "runtime_s")
+
+
+def results_table(fits, sim, scenario, opts) -> pd.DataFrame:
+    scenario = {c: scenario.get(c) for c in SCENARIO_COLUMNS}
+    scenario.update(n_signatures=sim["H"].shape[0], n_signatures_fit=fits[0]["n_fit"] if fits else None,
+                    n_starts=len(fits[0]["starts"]) if fits else None, tie_tol=opts.tie_tol,
+                    jsd_min_filter=opts.jsd_min_filter)
+    rows = [dict(scenario, **row) for fit in fits for row in evaluate_method(fit, sim, opts)]
+    return pd.DataFrame(rows).reindex(columns=[*SCENARIO_COLUMNS, *METRIC_COLUMNS])
+
+
+def write_table(df, path) -> None:
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(path, sep="\t", index=False)
+    summary = df[["method", "set", "chunk_size", "kl_loss", "w_tvd", "tumor_auc"]]
+    print(summary.to_string(index=False, float_format=lambda x: f"{x:.4g}"), flush=True)
 
 
 def run(opts) -> pd.DataFrame:
@@ -658,38 +794,28 @@ def run(opts) -> pd.DataFrame:
         opts.replicate = scenario["replicate"]  # seeds of the fits
     else:
         sim, scenario = simulate(opts), scenario_values(opts)
-    C_true = sim["H"].shape[0]
-    n_fit = opts.n_signatures_fit or C_true
+    fit_options = {k: getattr(opts, k) for k in FIT_OPTION_KEYS}
+    scenario["volume_regularization"] = opts.volume_regularization
+    n_fit = opts.n_signatures_fit or sim["H"].shape[0]
     chunk_sizes = [int(v) for v in opts.test_chunk_sizes.split(",") if v.strip()]
-    scenario = {c: scenario.get(c, getattr(opts, c, None)) for c in SCENARIO_COLUMNS}
-    scenario.update(n_signatures_fit=n_fit, n_starts=opts.n_starts, volume_regularization=opts.volume_regularization)
-    scenario["n_signatures"] = C_true
-    rows = []
+    fits = []
     for method in methods:
-        t0 = time.time()
-        fits = [fit_train(method, sim, opts, n_fit, seed=1000 * opts.replicate + s) for s in range(opts.n_starts)]
-        best = min(fits, key=lambda f: f["loss"])
-        train_eval = evaluate_train(best, sim, n_fit)
-        row = dict(scenario, method=method, set="train", chunk_size=np.nan,
-                   **{k: v for k, v in train_eval.items() if not k.startswith("_")},
-                   **spread(fits, best, opts.tie_tol, sim["H"]), runtime_s=time.time() - t0)
-        rows.append(row)
-        print(f"{method:7s} train: w_mae={row.get('w_mae', np.nan):.4f} tumor_auc={row['tumor_auc']:.3f} "
-              f"kl={row['kl_loss']:.3e} ({row['runtime_s']:.0f} s)", flush=True)
-        if sim["test"] is None:
-            continue
-        for size in chunk_sizes:
-            t0 = time.time()
-            test_eval = evaluate_test(method, best, train_eval, sim, opts, n_fit, size)
-            if not test_eval:
-                continue
-            rows.append(dict(scenario, method=method, set="test", chunk_size=size, **test_eval,
-                             runtime_s=time.time() - t0))
-            print(f"{method:7s} test (chunks of {size}): w_mae={test_eval.get('w_mae', np.nan):.4f} "
-                  f"tumor_auc={test_eval['tumor_auc']:.3f}", flush=True)
-    df = pd.DataFrame(rows).reindex(columns=[*SCENARIO_COLUMNS, *METRIC_COLUMNS])
-    Path(opts.out).parent.mkdir(parents=True, exist_ok=True)
-    df.to_csv(opts.out, sep="\t", index=False)
+        fits.append(fit_method(method, sim, opts, n_fit, chunk_sizes))
+        print(f"{method:7s} fitted ({fits[-1]['train_runtime']:.0f} s for {opts.n_starts} starts)", flush=True)
+    if opts.fits:
+        save_fits(fits, opts.fits, fit_options)
+    df = results_table(fits, sim, scenario, opts)
+    write_table(df, opts.out)
+    return df
+
+
+def evaluate(opts) -> pd.DataFrame:
+    """Recompute the metrics from a saved dataset and saved fits, without refitting."""
+    sim, scenario = load_dataset(opts.data)
+    fits, fit_options = load_fits(opts.fits)
+    scenario["volume_regularization"] = fit_options["volume_regularization"]
+    df = results_table(fits, sim, scenario, opts)
+    write_table(df, opts.out)
     return df
 
 
@@ -769,8 +895,10 @@ def main(args: list[str] | None = None) -> int:
     opts = get_parser().parse_args(args)
     if opts.command == "simulate":
         write_dataset(opts)
-    else:
+    elif opts.command == "run":
         run(opts)
+    else:
+        evaluate(opts)
     return 0
 
 

@@ -2,7 +2,8 @@
 #
 # For every experiment, setting and replicate:
 #   simulate_*  creates a synthetic dataset (simulate.py simulate --npz)
-#   fit_*       fits one method to it and evaluates against the truth (simulate.py run --data)
+#   fit_*       fits one method to it, evaluates against the truth and keeps the fitted
+#               parameters (simulate.py run --data ... --fits)
 #   merge_*     collects the result tables per setting, per experiment and for the whole study
 #
 # Each experiment changes one thing from the base scenario. Settings that end up with the
@@ -87,12 +88,16 @@ base_data = {
     'steepness': 1,
     'sample_filter_sd': 0,
     'depth': '1e6',
-    'dm_concentration': 0}
+    'dm_concentration': 0,
+    # No pseudo-count. A pseudo-count adds a uniform floor that the model cannot explain; at
+    # low depth this distorts every fit, most of all the oracle, whose filters are fixed.
+    'pseudo_count': 0}
 base_fit = {
     'n_starts': 5,
-    'test_chunk_sizes': '50'}
-# Options that only change how the data are fitted; everything else changes the data.
-fit_keys = {'n_starts', 'test_chunk_sizes', 'n_signatures_fit', 'volume_regularization', 'tol'}
+    'test_chunk_sizes': '50',
+    'tie_tol': '1e-3'}
+# Options that only change how the data are fitted or evaluated; everything else changes the data.
+fit_keys = {'n_starts', 'test_chunk_sizes', 'n_signatures_fit', 'volume_regularization', 'tol', 'tie_tol'}
 
 # One factor at a time around the base scenario.
 experiments = {
@@ -145,9 +150,12 @@ for experiment, settings in experiments.items():
                     mv {data_file}.tmp.npz {data_file}
                     '''
 
-            # Fit and evaluate each method.
+            # Fit and evaluate each method. The fitted parameters of every start are kept
+            # next to the results table, so metrics can be recomputed without refitting
+            # (simulate.py evaluate --data DATA --fits FITS --out TABLE).
             for method in methods:
                 outfile = f'{study_dir}/fits/{data_label}/{fit_label}/rep{rep}_{method}.tsv'
+                fits_file = f'{study_dir}/fits/{data_label}/{fit_label}/rep{rep}_{method}.npz'
                 result_files.append(outfile)
                 if outfile in fitted:
                     continue
@@ -156,12 +164,14 @@ for experiment, settings in experiments.items():
                 gwf.target(
                     legalize_target_name(f'{fit_name}_rep{rep}'),
                     inputs=[data_file],
-                    outputs=[outfile]) << \
+                    outputs=[outfile, fits_file]) << \
                     f'''
                     set -euo pipefail
                     mkdir -p $(dirname {outfile})
                     export OMP_NUM_THREADS={fit_threads}
-                    {python} {simulate} run --data {data_file} --methods {method} {cli_args(fit_params)} --out {outfile}.tmp.tsv
+                    {python} {simulate} run --data {data_file} --methods {method} {cli_args(fit_params)} \\
+                        --out {outfile}.tmp.tsv --fits {fits_file}.tmp.npz
+                    mv {fits_file}.tmp.npz {fits_file}
                     mv {outfile}.tmp.tsv {outfile}
                     '''
 

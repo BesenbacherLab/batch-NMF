@@ -138,3 +138,47 @@ def test_test_batch_does_not_depend_on_training_design(sim):
     assert np.allclose(a["test"]["X"], b["test"]["X"])
     assert np.allclose(a["F"][-1], b["F"][-1])
     assert np.allclose(a["F"][1], b["F"][1])  # first filtered training batch is also unchanged
+
+
+def test_w_tvd(sim):
+    W_true = np.array([[1.0, 0.0, 0.0], [0.5, 0.5, 0.0]])
+    W_est = np.array([[0.8, 0.2, 0.0], [0.5, 0.3, 0.2]])
+    m = sim.w_metrics(W_true, W_est, tumor_idx=1)
+    assert m["w_tvd"] == pytest.approx(0.2)  # 20% of each sample's weight is misassigned
+    assert m["w_mae"] == pytest.approx(0.8 / 6)
+
+
+def test_corrected_jsd_ignores_lengths_without_signal(sim):
+    """With the true filter as the estimate, the corrected profile should match the truth, even
+    though the observed data have a pseudo-count floor where the filter removes everything."""
+    L = np.arange(50, 151, dtype=float)
+    P = sim.rownorm(np.exp(-0.5 * ((L - 120) / 20) ** 2)[None, :])
+    F = np.vstack([np.ones_like(L), sim.hill_increasing(L, 100, 30)])  # reference + strong short depletion
+    X = sim.rownorm(1e6 * sim.rownorm(P * F[1]) + 1)  # counts + pseudo-count, normalised
+    batch = np.array([1])
+    unmasked = sim.corrected_jsd(X, F[batch], F[0], P, np.ones_like(X, dtype=bool))
+    masked = sim.corrected_jsd(X, F[batch], F[0], P, sim.retained_lengths(F, batch, 0.01))
+    assert unmasked > 0.1
+    assert masked < 1e-3
+    assert sim.retained_lengths(F, np.array([0]), 0.01).all()  # nothing is dropped in the reference batch
+
+
+def test_evaluate_reproduces_run(sim, tmp_path):
+    npz = tmp_path / "data.npz"
+    sim.main(["simulate", *SMALL, "--npz", str(npz)])
+    fit = ["--methods", "bnmf,sfnmf,nmf", "--n_starts", "3", "--n_epochs", "100", "--predict_n_epochs", "30",
+           "--sklearn_max_iter", "100", "--test_chunk_sizes", "4,2"]
+    sim.main(["run", "--data", str(npz), *fit, "--out", str(tmp_path / "run.tsv"), "--fits", str(tmp_path / "fits.npz")])
+    sim.main(["evaluate", "--data", str(npz), "--fits", str(tmp_path / "fits.npz"), "--out", str(tmp_path / "ev.tsv")])
+    a = pd.read_csv(tmp_path / "run.tsv", sep="\t")
+    b = pd.read_csv(tmp_path / "ev.tsv", sep="\t")
+    pd.testing.assert_frame_equal(a, b)
+    assert len(a) == 3 * 3  # train + two chunk sizes for each method
+
+    # a looser tie tolerance only changes the spread columns
+    sim.main(["evaluate", "--data", str(npz), "--fits", str(tmp_path / "fits.npz"), "--tie_tol", "1",
+              "--out", str(tmp_path / "ev2.tsv")])
+    c = pd.read_csv(tmp_path / "ev2.tsv", sep="\t")
+    changed = [col for col in a.columns if not a[col].equals(c[col])]
+    assert set(changed) <= {"tie_tol", "n_tied_starts", "spread_w_tvd", "spread_w_mae", "spread_h_cos"}
+    assert (c.loc[c.set == "train", "n_tied_starts"] == 3).all()
