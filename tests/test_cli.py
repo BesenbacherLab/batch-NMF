@@ -135,3 +135,43 @@ def test_epoch_options_reach_the_model(input_files):
     ]) == 0
     log = pd.read_csv(logfile, sep="\t")
     assert log.groupby("run")["epoch"].max().to_dict() == {"final": 4, "initial_0": 6, "initial_1": 6}
+
+
+def _fit_outputs(tmp_path, matrix, method, seed, name):
+    """Run a short fit and return the output files as arrays."""
+    files = {k: str(tmp_path / f"{name}_{k}.tsv") for k in ("sig", "exp", "filt")}
+    batch = [] if method == "scipy" else ["--all_separate_batch", "--filter_file", files["filt"]]
+    assert cli.main([
+        "fit", "--method", method, *batch, "--input_matrix", matrix,
+        "--signature_file", files["sig"], "--exposure_file", files["exp"],
+        "--n_restarts", "2", "--n_epochs_restart", "30", "--n_epochs", "30", "--tol", "0", "--seed", str(seed),
+    ]) == 0
+    keys = ("sig", "exp") if method == "scipy" else ("sig", "exp", "filt")
+    return [pd.read_csv(files[k], sep="\t", index_col=0).to_numpy() for k in keys]
+
+
+@pytest.mark.parametrize("method", ["bNMF", "sfNMF", "scipy"])
+def test_seed_makes_fit_repeatable(input_files, method):
+    tmp_path, matrix, _ = input_files
+    first = _fit_outputs(tmp_path, matrix, method, 1, "a")
+    again = _fit_outputs(tmp_path, matrix, method, 1, "b")
+    other = _fit_outputs(tmp_path, matrix, method, 2, "c")
+    for x, y in zip(first, again):
+        assert_array_equal(x, y)
+    assert not all(np.array_equal(x, z) for x, z in zip(first, other))
+
+
+def test_seed_makes_predict_repeatable(input_files):
+    tmp_path, matrix, H = input_files
+    sig = _write_tsv(tmp_path / "sig.tsv", H, ["Sig1", "Sig2"], LENGTH_COLS, "signature")
+
+    def predict(name):
+        exposure_file = str(tmp_path / f"{name}_exp.tsv")
+        assert cli.main([
+            "predict", "--method", "bNMF", "--all_separate_batch", "--input_matrix", matrix,
+            "--signature_file", sig, "--exposure_file", exposure_file, "--filter_file", str(tmp_path / f"{name}_filt.tsv"),
+            "--n_restarts", "1", "--n_epochs_restart", "30", "--n_epochs", "30", "--tol", "0", "--seed", "3",
+        ]) == 0
+        return pd.read_csv(exposure_file, sep="\t", index_col=0).to_numpy()
+
+    assert_array_equal(predict("a"), predict("b"))

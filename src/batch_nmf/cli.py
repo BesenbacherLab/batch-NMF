@@ -10,6 +10,7 @@ from batch_nmf.nmf.scipy_nmf import fit_scipy_nmf
 from batch_nmf.utils import DEFAULT_TOL, DEFAULT_CHECK_EVERY
 from sklearn.decomposition import non_negative_factorization
 import numpy as np
+import torch
 
 def get_parser():
     """
@@ -72,6 +73,10 @@ def get_parser():
     parser.add_argument('--lr_decrease_factor', type=float, default = 0.80)
     parser.add_argument('--n_restarts', type=int, default = 4,
                         help='Number of random restarts; the best one is refined in the final run. Default is 4.')
+    parser.add_argument('--seed', type=int, default = None,
+                        help='Seed for the random initialisations, so that a run can be repeated exactly '
+                        '(same input, options, software versions and number of CPU threads). '
+                        'Default: no seed, so every run starts from different random values.')
     parser.add_argument('--filter_regularization', type=float, default=-1)
     parser.add_argument('--scaler_regularization', type=float, default=-1)
     parser.add_argument('--volume_regularization', type=float, default=-1)
@@ -146,13 +151,18 @@ def _run(opts):
     # Normalize input matrix so that each row sums to 1.
     input_matrix = input_matrix/input_matrix.sum(1, keepdims=True)  
 
+    # Seed before any model is created: the models draw their initial values when constructed.
+    if opts.seed is not None:
+        torch.manual_seed(opts.seed)
+
     if opts.command == 'fit':
         sig_names = [f'Sig{i+1}' for i in range(opts.n_signatures)]
 
         if opts.batch_file is None and not opts.all_separate_batch:
             assert opts.method == 'scipy', "batch_file is required unless --method=scipy or --all_separate_batch option is set"
             print("Fitting plain NMF using scipy...")
-            loss, W_est, H_est = fit_scipy_nmf(input_matrix, opts.n_signatures, opts.n_restarts, beta_loss=opts.loss)
+            loss, W_est, H_est = fit_scipy_nmf(input_matrix, opts.n_signatures, opts.n_restarts, beta_loss=opts.loss,
+                                               random_state=opts.seed)
         else:
             assert opts.method != 'scipy', "--batch_file or --all_separate_batch option should not be set when method is scipy"
             if opts.all_separate_batch:
@@ -234,7 +244,7 @@ def _run(opts):
 
         if opts.batch_file is None and not opts.all_separate_batch:
             assert opts.method == 'scipy', "batch_file is required unless --method=scipy or --all_separate_batch option is set"
-            W_est, H_est, n_iter = non_negative_factorization(input_matrix, H=signature_matrix, update_H=False, n_components=n_signatures, tol=1e-7, max_iter=1000000, init="random", beta_loss=opts.loss, solver='mu')
+            W_est, H_est, n_iter = non_negative_factorization(input_matrix, H=signature_matrix, update_H=False, n_components=n_signatures, tol=1e-7, max_iter=1000000, init="random", beta_loss=opts.loss, solver='mu', random_state=opts.seed)
             loss = -1
         else:
             assert opts.method != 'scipy', "--batch_file or --all_separate_batch option should not be set when method is scipy"
