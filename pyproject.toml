@@ -33,9 +33,9 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/BesenbacherLab/batch_NMF"
-Repository = "https://github.com/BesenbacherLab/batch_NMF"
-Issues = "https://github.com/BesenbacherLab/batch_NMF/issues"
+Homepage = "https://github.com/BesenbacherLab/batch-NMF"
+Repository = "https://github.com/BesenbacherLab/batch-NMF"
+Issues = "https://github.com/BesenbacherLab/batch-NMF/issues"
 
 [project.scripts]
 batch-nmf = "batch_nmf.cli:main"

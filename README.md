@@ -11,18 +11,18 @@ Install the command line tool `batch-nmf` directly from GitHub with pip, prefera
 ```
 python -m venv batch-nmf-env
 source batch-nmf-env/bin/activate
-pip install git+https://github.com/BesenbacherLab/batch_NMF.git
+pip install git+https://github.com/BesenbacherLab/batch-NMF.git
 ```
 
 To install a specific version, add its tag (or a commit hash) at the end:
 ```
-pip install git+https://github.com/BesenbacherLab/batch_NMF.git@0.2.0
+pip install git+https://github.com/BesenbacherLab/batch-NMF.git@0.2.0
 ```
 
 [uv](https://docs.astral.sh/uv/) and [pipx](https://pipx.pypa.io) can install it the same way, each in an environment of its own:
 ```
-uv tool install git+https://github.com/BesenbacherLab/batch_NMF.git
-pipx install git+https://github.com/BesenbacherLab/batch_NMF.git
+uv tool install git+https://github.com/BesenbacherLab/batch-NMF.git
+pipx install git+https://github.com/BesenbacherLab/batch-NMF.git
 ```
 
 Check that it works with:
@@ -33,7 +33,7 @@ batch-nmf --version
 batch-nmf depends on PyTorch. On Linux, pip installs the GPU (CUDA) version of PyTorch by default, which is a download of several GB. If you will only run batch-nmf on CPUs, install the CPU version of PyTorch first:
 ```
 pip install torch --index-url https://download.pytorch.org/whl/cpu
-pip install git+https://github.com/BesenbacherLab/batch_NMF.git
+pip install git+https://github.com/BesenbacherLab/batch-NMF.git
 ```
 
 ## Usage
@@ -47,8 +47,8 @@ The program has two main commands "fit" and "predict". "fit" is used to learn bo
 
 The example data are in the `test_data` directory of the repository. To try them, clone the repository and go to its directory:
 ```
-git clone https://github.com/BesenbacherLab/batch_NMF.git
-cd batch_NMF
+git clone https://github.com/BesenbacherLab/batch-NMF.git
+cd batch-NMF
 ```
 
 The following command will fit a bNMF model to the input matrix in the test_data directory:
@@ -83,8 +83,8 @@ And a plot of the estimated filters:
 
 For development we use [uv](https://docs.astral.sh/uv/) to handle dependencies. Clone the repository and install the project with all its dependencies in a virtual environment (`.venv`):
 ```
-git clone https://github.com/BesenbacherLab/batch_NMF.git
-cd batch_NMF
+git clone https://github.com/BesenbacherLab/batch-NMF.git
+cd batch-NMF
 uv sync
 ```
 
@@ -92,7 +92,7 @@ The code is installed in editable mode, so changes take effect without reinstall
 ```
 uv run batch-nmf -h
 ```
-or, from any directory, with the full path `/path/to/batch_NMF/.venv/bin/batch-nmf`.
+or, from any directory, with the full path `/path/to/batch-NMF/.venv/bin/batch-nmf`.
 
 Run the tests with:
 ```
