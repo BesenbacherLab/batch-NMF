@@ -1,28 +1,39 @@
 # batch-NMF
-pytorch implementation of NMF extentions that incorporate batch effects including Batch NMF(bNMF) and Sigmoid Filter NMF (sfNMF).
+PyTorch implementation of NMF extensions that model batch effects: Batch NMF (bNMF) and Sigmoid Filter NMF (sfNMF).
 
 ## Requirements
 
-batch-nmf requires Python 3.9 or above.
+batch-nmf requires Python 3.10 or above, and git (pip uses it to download the code).
 
 ## Installation
 
-To get batch-nmf and test_data to test run it on, you can first clone the repo:
+Install the command line tool `batch-nmf` directly from GitHub with pip, preferably in a virtual environment:
 ```
-git clone https://github.com/BesenbacherLab/batch-NMF.git
-```
-then go to the directory:
-```
-cd batch-NMF
-```
-The command line tool can then be installed using pip:
-```
-pip install dist/batch_nmf-0.1.0-py3-none-any.whl
+python -m venv batch-nmf-env
+source batch-nmf-env/bin/activate
+pip install git+https://github.com/BesenbacherLab/batch_NMF.git
 ```
 
-or using pipx:
+To install a specific version, add its tag (or a commit hash) at the end:
 ```
-pipx install dist/batch_nmf-0.1.0-py3-none-any.whl
+pip install git+https://github.com/BesenbacherLab/batch_NMF.git@0.2.0
+```
+
+[uv](https://docs.astral.sh/uv/) and [pipx](https://pipx.pypa.io) can install it the same way, each in an environment of its own:
+```
+uv tool install git+https://github.com/BesenbacherLab/batch_NMF.git
+pipx install git+https://github.com/BesenbacherLab/batch_NMF.git
+```
+
+Check that it works with:
+```
+batch-nmf --version
+```
+
+batch-nmf depends on PyTorch. On Linux, pip installs the GPU (CUDA) version of PyTorch by default, which is a download of several GB. If you will only run batch-nmf on CPUs, install the CPU version of PyTorch first:
+```
+pip install torch --index-url https://download.pytorch.org/whl/cpu
+pip install git+https://github.com/BesenbacherLab/batch_NMF.git
 ```
 
 ## Usage
@@ -34,17 +45,23 @@ batch-nmf -h
 
 The program has two main commands "fit" and "predict". "fit" is used to learn both a set of signatures and their weights from an input matrix. "predict" uses a known set of signatures and infers their weight from the input matrix.
 
+The example data are in the `test_data` directory of the repository. To try them, clone the repository and go to its directory:
+```
+git clone https://github.com/BesenbacherLab/batch_NMF.git
+cd batch_NMF
+```
+
 The following command will fit a bNMF model to the input matrix in the test_data directory:
 
 ```
-batch-nmf fit --input_matrix test_data/length_data.tsv --batch_file test_data/batch_file.tsv --exposure_file test_data/estimated_exposures_bNMF_2sigs.tsv --signature test_data/estimated_signatures_bNMF_2sigs.tsv --n_signatures 2 --filter_file test_data/estimated_filters_bNMF_2sigs.tsv
+batch-nmf fit --input_matrix test_data/length_data.tsv --batch_file test_data/batch_file.tsv --exposure_file test_data/estimated_exposures_bNMF_2sigs.tsv --signature_file test_data/estimated_signatures_bNMF_2sigs.tsv --n_signatures 2 --filter_file test_data/estimated_filters_bNMF_2sigs.tsv
 ```
 Add `--seed` with any integer (e.g. `--seed 1`) to make a run repeatable; without it, every run starts from different random values.
 
-Running this will take 1-2 minutes on a normal labtop. If you need to fit a bNMF or sfNMF model to large datasets with hundreds of samples we recommend running it on a GPU to limit the running time.
+Running this takes a minute or two on a laptop. Larger datasets take longer: with several hundred samples and many signatures, a fit can take an hour or more. batch-nmf uses a GPU automatically if PyTorch finds one. On CPUs, set `OMP_NUM_THREADS` to the number of cores it may use (for example `export OMP_NUM_THREADS=2` in a cluster job with 2 cores).
 
 ## Plotting output
-The estimated signatures and filters can be plotted using the script `R_script/plot_lengths.R`. 
+The estimated signatures and filters can be plotted using the script `R_scripts/plot_lengths.R` in the repository.
 
 Running this script requires that R is installed as well as the R package "tidyverse". If R is not installed on your system it can be installed together with the necessary libraries using conda:
 ```
@@ -64,35 +81,33 @@ And a plot of the estimated filters:
 
 ## Development
 
-For development we use [poetry](https://python-poetry.org) to handle dependencies.
-If poetry is not installed on your system you can install poetry using pipx:
+For development we use [uv](https://docs.astral.sh/uv/) to handle dependencies. Clone the repository and install the project with all its dependencies in a virtual environment (`.venv`):
 ```
-pipx install poetry
-```
-Once poetry is installed you can install the current project including all dependencies using the following command:
-```
-poetry install
+git clone https://github.com/BesenbacherLab/batch_NMF.git
+cd batch_NMF
+uv sync
 ```
 
-### Using poetry to run the software
+The code is installed in editable mode, so changes take effect without reinstalling. To run the tool in this environment:
+```
+uv run batch-nmf -h
+```
+or, from any directory, with the full path `/path/to/batch_NMF/.venv/bin/batch-nmf`.
 
-poetry creates a virtual environment so that the current project is isolated from the rest of the system. To run a command in the poetry virtual environment you type `poetry run {command}`. So to run the batch_nmf tool you can type:
+Run the tests with:
 ```
-poetry run batch_nmf
+make test
 ```
-This only works if you are in the current directory. If you want to run the code from a different directory you can first make sure that the current version is installed in the poetry environment by running `poetry install` and then using the `which` command to get the full path of the installed version:
-```
-poetry install
-poetry run which batch-nmf
-```
-That will return a full path to an executable that can be run from any directory.
 
-### Using poetry to add dependencies
-
-If we want to use numpy in our program we can add it as a dependency using the command:
+Add a dependency (here numpy) with:
 ```
-poetry add numpy
+uv add numpy
 ```
-poetry will then find a version of numpy that fits with the requirements of other packages and install it.
 
-
+The version number is set in `pyproject.toml`. To make a new version, bump it with `uv version` (which also updates `uv.lock`), commit, and tag the commit so that it can be installed with `@<version>`:
+```
+uv version --bump minor    # or --bump patch / --bump major
+git commit -am "chore: version $(uv version --short)"
+git tag $(uv version --short)
+git push && git push --tags
+```
