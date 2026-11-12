@@ -9,9 +9,9 @@ authors = [{name = "Søren Besenbacher", email = "besenbacher@clin.au.dk"}]
 license = "MIT"
 license-files = ["LICENSE"]
 readme = "README.md"
+version = "0.2.0"
 requires-python = ">=3.10"
 keywords = []
-dynamic = ["version"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -42,10 +42,6 @@ homepage = "https://github.com/besenbacherLab/batch-NMF"
 
 [project.scripts]
 batch-nmf = "batch_nmf.cli:main"
-
-[tool.pdm.version]
-source = "call"
-getter = "scripts.get_version:get_version"
 
 [tool.pdm.build]
 # Include as much as possible in the source distribution, to help redistributors.

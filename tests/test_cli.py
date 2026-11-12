@@ -27,6 +27,15 @@ def test_show_help(capsys):
     assert "batch-nmf" in captured.out
 
 
+def test_version_is_the_installed_version(capsys):
+    """`--version` reports the version in pyproject.toml (via the installed package metadata)."""
+    from importlib.metadata import version
+
+    with pytest.raises(SystemExit):
+        cli.main(["--version"])
+    assert capsys.readouterr().out.strip() == f"batch-nmf {version('batch-nmf')}"
+
+
 LENGTH_COLS = [f"length_{i}" for i in range(100, 112)]
 
 
