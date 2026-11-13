@@ -9,11 +9,6 @@ from batch_nmf import cli
 from batch_nmf.nmf.sigmoid_filter import sigmoidfilterNMF
 
 
-#def test_main():
-#    """Basic CLI test."""
-#    assert cli.main([]) == 0
-
-
 def test_show_help(capsys):
     """
     Show help.
@@ -131,6 +126,38 @@ def test_sfnmf_unparsable_column_names(tmp_path):
     matrix = _write_tsv(tmp_path / "input.tsv", counts, ["s1", "s2", "s3"], ["a", "b", "c", "d"], "sample_id")
     with pytest.raises(ValueError, match="min_length"):
         _fit_sfnmf(tmp_path, matrix)
+
+
+@pytest.mark.parametrize("method", ["adam", "scipy"])
+def test_plain_nmf_fit_and_predict(input_files, method):
+    """Standard NMF (no batch effects) reconstructs the test data, and predict gives back the
+    weights of the fit."""
+    tmp_path, matrix, _ = input_files
+    sig_file, exp_file, test_exp_file = (str(tmp_path / f"{method}_{x}.tsv") for x in ("sig", "exp", "test_exp"))
+    common = ["--method", method, "--input_matrix", matrix, "--seed", "1", "--n_restarts", "1"]
+    assert cli.main(["fit", *common, "--n_signatures", "2", "--signature_file", sig_file, "--exposure_file", exp_file]) == 0
+    X = pd.read_csv(matrix, sep="\t", index_col=0).to_numpy() + 1  # default pseudo-count
+    X = X / X.sum(1, keepdims=True)
+    W_est = pd.read_csv(exp_file, sep="\t", index_col=0).to_numpy()
+    H_est = pd.read_csv(sig_file, sep="\t", index_col=0).to_numpy()
+    X_est = W_est @ H_est
+    assert_allclose(X_est / X_est.sum(1, keepdims=True), X, rtol=1e-3)
+    assert cli.main(["predict", *common, "--signature_file", sig_file, "--exposure_file", test_exp_file]) == 0
+    assert_allclose(pd.read_csv(test_exp_file, sep="\t", index_col=0).to_numpy(), W_est, atol=1e-3)
+
+
+@pytest.mark.parametrize("method", ["adam", "scipy"])
+def test_plain_nmf_rejects_batch_file(input_files, method):
+    tmp_path, matrix, _ = input_files
+    with pytest.raises(AssertionError, match="no batch effects"):
+        cli.main(["fit", "--method", method, "--all_separate_batch", "--input_matrix", matrix,
+                  "--signature_file", str(tmp_path / "s.tsv"), "--exposure_file", str(tmp_path / "e.tsv")])
+
+
+def test_sfnmf_filter_regularization_warns(input_files):
+    tmp_path, matrix, _ = input_files
+    with pytest.warns(UserWarning, match="no effect for sfNMF"):
+        assert _fit_sfnmf(tmp_path, matrix, "--filter_regularization", "1") == 0
 
 
 def test_epoch_options_reach_the_model(input_files):

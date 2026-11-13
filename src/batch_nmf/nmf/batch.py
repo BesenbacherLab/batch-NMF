@@ -1,6 +1,4 @@
 import torch
-import numpy as np
-import torch.nn as nn
 from batch_nmf.nmf.base import baseNMF
 
 class batchNMF(baseNMF):
@@ -16,7 +14,7 @@ class batchNMF(baseNMF):
         volume_regularization=-1,
     ):
         super().__init__(target, n_signatures, H, volume_regularization=volume_regularization)
-        self.name = f"batch_NMF"
+        self.name = "batch_NMF"
         self.filter_regularization = filter_regularization
         self.scaler_regularization = scaler_regularization
         self.B = torch.tensor(B, dtype=self.dtype, device=self.device)

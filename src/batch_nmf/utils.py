@@ -6,13 +6,20 @@ import time
 from copy import deepcopy
 
 MAX_SD = 2
-DEFAULT_EPOCHS = 100000
-DEFAULT_N_LOWERING = 4
+
+# Default fitting options, shared by the Python API (baseNMF.fit, train_model,
+# get_best_model) and the command line tool.
+DEFAULT_LOSS = 'kullback-leibler'
+DEFAULT_RESTARTS = 4        # random restarts before the final run
+DEFAULT_LR = 0.5            # initial learning rate (Adam)
+DEFAULT_LR_FACTOR = 0.8     # factor applied to the learning rate when the loss stops improving
+DEFAULT_MIN_LR = 1e-4       # a run stops when the learning rate falls below this
 
 # Convergence-based stopping (see get_best_model). The epoch counts are upper limits;
 # a run stops earlier once no fitted value changes by more than DEFAULT_TOL over
 # DEFAULT_CHECK_EVERY epochs.
-DEFAULT_RESTART_EPOCHS = 40000
+DEFAULT_EPOCHS = 50000           # final run
+DEFAULT_RESTART_EPOCHS = 40000   # each restart
 DEFAULT_TOL = 1e-4
 DEFAULT_CHECK_EVERY = 1000
 
@@ -77,15 +84,6 @@ def _write_log_row(logfile, model, lr, traintype, epoch, loss_wp, loss_np, best_
     logfile.flush()
 
 
-def print_vec_diff(name, X, Y):
-    print('====', name, '====')
-    #print(np.mean(X), np.mean(Y), np.mean(X)-np.mean(Y))
-    #print(np.min(Y), np.max(Y), np.max(Y)-np.min(Y))
-    q75, q50, q25 = np.percentile(X, [75 ,50, 25])
-    print(q25, q50, q75, q75-q25)
-    q75, q50, q25 = np.percentile(Y, [75 ,50, 25])
-    print(q25, q50, q75, q75-q25)
-
 def get_best_model(
     model, 
     target, 
@@ -95,11 +93,11 @@ def get_best_model(
     loss_fn,
     traintype,
     n_epochs = DEFAULT_EPOCHS,
-    lr = 0.1, 
+    lr = DEFAULT_LR,
     logfile=None, 
     verbosity = 2,
-    min_lr_rate = 1e-5,
-    lr_decrease_factor = 0.90,
+    min_lr_rate = DEFAULT_MIN_LR,
+    lr_decrease_factor = DEFAULT_LR_FACTOR,
     log_input = False,
     tol = DEFAULT_TOL,
     check_every = DEFAULT_CHECK_EVERY,
@@ -136,13 +134,6 @@ def get_best_model(
             loss = loss_fn(Y_, target)
 
         loss_np = loss.item() # loss without penalty
-        
-        #if loss_np < 0:
-        #    print("Loss is negative, resetting to 0.0")
-        #    print_vec_diff("Y_", Y_.cpu().detach().numpy(), target.cpu().detach().numpy())
-        #    print(Y_.cpu().detach().numpy().sum(1, keepdims=True))
-        #    print(target.cpu().detach().numpy().sum(1, keepdims=True))
-        #    assert loss_np >= 0, "Loss should not be negative"
 
         if hasattr(model, "get_penalty") and not model.predict:
             penalty = model.get_penalty()
@@ -206,7 +197,7 @@ def batch_balanced_weights(B):
     return 1.0 / batch_sizes
 
 
-def make_loss_fn(model, loss='frobenius', weighted_loss=False):
+def make_loss_fn(model, loss=DEFAULT_LOSS, weighted_loss=False):
     """Return the training loss function for `model`.
 
     For 'kullback-leibler' the returned function expects log-probabilities as its first argument.
@@ -240,13 +231,13 @@ def train_model(
     model, 
     target, 
     n_epochs = DEFAULT_EPOCHS,
-    restarts = 5, 
-    lr = 0.1, 
+    restarts = DEFAULT_RESTARTS,
+    lr = DEFAULT_LR,
     logfile=None,
     verbosity = 2,
-    min_lr_rate = 1e-4,
-    lr_decrease_factor = 0.90,
-    loss = 'frobenius',
+    min_lr_rate = DEFAULT_MIN_LR,
+    lr_decrease_factor = DEFAULT_LR_FACTOR,
+    loss = DEFAULT_LOSS,
     weighted_loss = False,
     n_epochs_restart = DEFAULT_RESTART_EPOCHS,
     tol = DEFAULT_TOL,
@@ -260,7 +251,6 @@ def train_model(
 
     See `get_best_model` for the stopping rules (`tol`, `check_every`, `min_lr_rate`).
     """
-    print(lr)
     loss_fn = make_loss_fn(model, loss, weighted_loss)
 
     best_loss = 1e30

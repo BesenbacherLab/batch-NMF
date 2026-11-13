@@ -16,19 +16,23 @@ class sigmoidfilterNMF(baseNMF):
         filter_regularization=-1,
         scaler_regularization=-1,
         volume_regularization=-1,
-        min_length=80,
+        min_length=None,
         lengths=None,
     ):
         """
         Arguments:
             filter_regularization: Not used. The smoothness penalty of bNMF has no effect on
                 sigmoid filters, which are smooth already; a positive value gives a warning.
+            scaler_regularization: Not used. The penalty of bNMF fixes the overall level of
+                the filters; sigmoid filters are always below 1, so it would always be 0.
+                A positive value gives a warning.
             min_length: Fragment length of the first column. The columns are assumed to be
                 consecutive lengths min_length, min_length+1, ... Ignored if `lengths` is given.
             lengths: Fragment length of each column of `target` (overrides `min_length`).
+                One of `lengths` and `min_length` is required.
         """
         super().__init__(target, n_signatures, H, volume_regularization=volume_regularization)
-        self.name = f"sigmoid_filter_NMF"
+        self.name = "sigmoid_filter_NMF"
         if filter_regularization > 0:
             warnings.warn(
                 "filter_regularization has no effect for sfNMF (the sigmoid filters are already smooth) "
@@ -36,11 +40,18 @@ class sigmoidfilterNMF(baseNMF):
                 UserWarning,
                 stacklevel=2,
             )
-        self.scaler_regularization = scaler_regularization
+        if scaler_regularization > 0:
+            warnings.warn(
+                "scaler_regularization has no effect for sfNMF (the sigmoid filters are always below 1) "
+                "and is ignored.",
+                UserWarning,
+                stacklevel=2,
+            )
         self.B = torch.tensor(B, dtype=self.dtype, device=self.device)
         self.n_batch = B.shape[1]
-        self.min_length = min_length
         if lengths is None:
+            if min_length is None:
+                raise ValueError("sigmoidfilterNMF needs the fragment lengths: give `lengths` or `min_length`")
             lengths = np.arange(min_length, min_length + self.n_types)
         lengths = np.asarray(lengths, dtype=float)
         assert lengths.shape == (self.n_types,), \
@@ -92,16 +103,9 @@ class sigmoidfilterNMF(baseNMF):
 
             return F
 
-    def get_penalty(self):
-        penalty = super().get_penalty()
-        if self.scaler_regularization > 0:
-            penalty += self.scaler_regularization * torch.nn.functional.relu(self.row_sum.max() - 1.0)
-        return penalty
-
     def forward(self):
         X = (self.get_W() @ self.get_H()) * (self.B @ self.get_F())
-        self.row_sum = X.sum(1, keepdims=True)
-        return X / self.row_sum
+        return X / X.sum(1, keepdims=True)
 
     def get_parameters(self):
         if self.predict:

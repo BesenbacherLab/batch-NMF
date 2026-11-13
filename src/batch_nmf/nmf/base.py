@@ -1,8 +1,8 @@
 import torch
-import numpy as np
 import torch.nn as nn
 from batch_nmf.utils import (
-    train_model, write_log_header, MAX_SD, DEFAULT_RESTART_EPOCHS, DEFAULT_TOL, DEFAULT_CHECK_EVERY,
+    train_model, write_log_header, MAX_SD, DEFAULT_EPOCHS, DEFAULT_RESTART_EPOCHS, DEFAULT_RESTARTS, DEFAULT_LR,
+    DEFAULT_LR_FACTOR, DEFAULT_MIN_LR, DEFAULT_LOSS, DEFAULT_TOL, DEFAULT_CHECK_EVERY,
 )
 
 class baseNMF(nn.Module):
@@ -22,7 +22,6 @@ class baseNMF(nn.Module):
         else:
             self.H = torch.tensor(H, dtype=dtype, device=self.device)
             self.predict = True
-        self.zero = torch.tensor(0.0, device=self.device)
         self.W_trans = torch.nn.Softmax(dim=1)
         self.W_shape = (n_samples, n_signatures)
         self.volume_regularization = volume_regularization
@@ -33,7 +32,6 @@ class baseNMF(nn.Module):
         )
 
     def rand_init(self):
-        #self.current_vr = self.volume_regularization
         self.W = self.init_par(self.W_shape, -1.0)
         if not self.predict:
             self.H = self.init_par(self.H_shape,  1.0)
@@ -56,41 +54,52 @@ class baseNMF(nn.Module):
             assert vol > 0.0
             return self.volume_regularization * vol
         else:
-            return torch.tensor(0.0, device=self.device) #0.0 #self.zero
+            return torch.tensor(0.0, device=self.device)
 
-    def fit(self, n_epochs=40000, logfile=None, lr=0.1, restarts = 4, vrgrid=False, loss='frobenius', weighted_loss=False, min_lr_rate=1e-5, lr_decrease_factor=0.90,
-            n_epochs_restart=DEFAULT_RESTART_EPOCHS, tol=DEFAULT_TOL, check_every=DEFAULT_CHECK_EVERY):
+    def fit(self, n_epochs=DEFAULT_EPOCHS, logfile=None, lr=DEFAULT_LR, restarts=DEFAULT_RESTARTS, loss=DEFAULT_LOSS,
+            weighted_loss=False, min_lr_rate=DEFAULT_MIN_LR, lr_decrease_factor=DEFAULT_LR_FACTOR,
+            n_epochs_restart=DEFAULT_RESTART_EPOCHS, tol=DEFAULT_TOL, check_every=DEFAULT_CHECK_EVERY, vrgrid=False):
         """Fit the model.
 
         Runs `restarts` random starts of at most `n_epochs_restart` epochs each and then a
         final run of at most `n_epochs` epochs from the best start. A run stops early once no
         fitted value changes by more than `tol` over `check_every` epochs (`tol=0` disables this).
+        The defaults are the same as those of the `batch-nmf` command line tool.
+
+        `vrgrid=True` (EXPERIMENTAL) chooses the volume regularization by a grid search, see `fit_grid`.
         """
-        if not vrgrid:
-            write_log_header(logfile)
-            return train_model(
-                self, self.X, n_epochs=n_epochs, logfile=logfile, lr=lr, restarts=restarts, loss=loss, weighted_loss=weighted_loss, min_lr_rate=min_lr_rate, lr_decrease_factor=lr_decrease_factor,
-                n_epochs_restart=n_epochs_restart, tol=tol, check_every=check_every,
-            )
-        else:
-            return self.fit_grid(n_epochs = n_epochs, logfile = logfile, lr =lr, restarts = restarts, loss=loss, weighted_loss=weighted_loss,
-                                 n_epochs_restart=n_epochs_restart, tol=tol, check_every=check_every)
-    
-    def fit_grid(self, n_epochs=40000, logfile=None, lr=0.1, restarts = 1, vr_grid =None, loss='frobenius', weighted_loss=False, rel_cutoff=1.001,
-                 n_epochs_restart=DEFAULT_RESTART_EPOCHS, tol=DEFAULT_TOL, check_every=DEFAULT_CHECK_EVERY):
+        options = dict(n_epochs=n_epochs, logfile=logfile, lr=lr, restarts=restarts, loss=loss,
+                       weighted_loss=weighted_loss, min_lr_rate=min_lr_rate, lr_decrease_factor=lr_decrease_factor,
+                       n_epochs_restart=n_epochs_restart, tol=tol, check_every=check_every)
+        if vrgrid:
+            return self.fit_grid(**options)
         write_log_header(logfile)
+        return train_model(self, self.X, **options)
+
+    def fit_grid(self, n_epochs=DEFAULT_EPOCHS, logfile=None, lr=DEFAULT_LR, restarts=DEFAULT_RESTARTS, vr_grid=None,
+                 loss=DEFAULT_LOSS, weighted_loss=False, rel_cutoff=1.001, min_lr_rate=DEFAULT_MIN_LR,
+                 lr_decrease_factor=DEFAULT_LR_FACTOR, n_epochs_restart=DEFAULT_RESTART_EPOCHS, tol=DEFAULT_TOL,
+                 check_every=DEFAULT_CHECK_EVERY):
+        """EXPERIMENTAL: choose the volume regularization by a grid search. Not tested.
+
+        Fits the model without volume regularization, then with increasing values: `vr_grid`, or
+        by default 11 values that start at loss / (50 * volume) and double each time. Each value
+        continues from the previous fit, with the learning rate divided by 50. The search stops at
+        the first value whose loss without the penalty is more than `rel_cutoff` times the loss of
+        the unregularized fit, and the fit with the previous value is returned.
+        """
+        write_log_header(logfile)
+        schedule = dict(min_lr_rate=min_lr_rate, lr_decrease_factor=lr_decrease_factor, tol=tol, check_every=check_every)
         self.volume_regularization = 0.0
         vr0_res, vr0_loss, vr0_loss_np, vr0_penalty = train_model(
-            self, self.X, n_epochs=n_epochs, logfile=logfile, lr=lr, restarts=restarts, verbosity=0, loss=loss, weighted_loss=weighted_loss,
-            n_epochs_restart=n_epochs_restart, tol=tol, check_every=check_every,
+            self, self.X, n_epochs=n_epochs, logfile=logfile, lr=lr, restarts=restarts, verbosity=0, loss=loss,
+            weighted_loss=weighted_loss, n_epochs_restart=n_epochs_restart, **schedule,
         )
 
-        best_loss_np = 1e30
         best_res = None
         best_vr_val = 0.0
         print('##### VRGRID #####', 0.0, vr0_loss, vr0_loss_np, vr0_penalty)
         if vr_grid is None:
-            #grid_dist = 1.5
             grid_dist = 2.0
             grid_len = 10
             H = self.get_H()
@@ -98,36 +107,30 @@ class baseNMF(nn.Module):
             vol = (torch.logdet(H@H.t() + torch.eye(self.n_signatures, dtype=self.dtype, device=self.device)*delta))
             val = vr0_loss / (50*vol.cpu().detach().numpy())
             vr_grid = [val]
-            for i in range(grid_len):
+            for _ in range(grid_len):
                 val = val * grid_dist
                 vr_grid.append(val)
         else:
-            vr_grid.sort()
-            vr_grid = [x for x in vr_grid if x>1e-30]
+            vr_grid = sorted(x for x in vr_grid if x > 1e-30)
 
         print(vr_grid)
-        print('max:',rel_cutoff * vr0_loss_np)
+        print('max:', rel_cutoff * vr0_loss_np)
         for vr_val in vr_grid:
             self.volume_regularization = vr_val
-            n_epochs2 = max(n_epochs, 40000)
-            
             res, vr_loss, vr_loss_np, penalty = train_model(
-                self, self.X, n_epochs=n_epochs2, logfile=logfile, lr=lr/50, restarts=0, verbosity=0, loss=loss, weighted_loss=weighted_loss,
-                tol=tol, check_every=check_every,
+                self, self.X, n_epochs=max(n_epochs, 40000), logfile=logfile, lr=lr/50, restarts=0, verbosity=0,
+                loss=loss, weighted_loss=weighted_loss, **schedule,
             )
             print('##### VRGRID #####', vr_val, vr_loss, vr_loss_np, penalty)
-            print('vr_loss_np', vr_loss_np)
-            if vr_loss_np < (rel_cutoff * vr0_loss_np):# and loss_np <= best_loss_np:
-                #print('better')
+            if vr_loss_np < (rel_cutoff * vr0_loss_np):
                 best_loss = vr_loss
                 best_loss_np = vr_loss_np
                 best_res = res
                 best_penalty = penalty
                 best_vr_val = vr_val
             else:
-                #print('not_better')
                 break
-         
+
         if best_res is None:
             best_res = vr0_res
             best_loss = vr0_loss
