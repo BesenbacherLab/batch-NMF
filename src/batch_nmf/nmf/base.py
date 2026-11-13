@@ -1,3 +1,5 @@
+from typing import TextIO
+
 import torch
 import torch.nn as nn
 from batch_nmf.utils import (
@@ -6,6 +8,8 @@ from batch_nmf.utils import (
 )
 
 class baseNMF(nn.Module):
+    """Common code of the NMF models (fitting, weights and signatures)."""
+
     def __init__(self, target, n_signatures=2, H=None, dtype=torch.double, volume_regularization=-1):
         super().__init__()
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -37,9 +41,14 @@ class baseNMF(nn.Module):
             self.H = self.init_par(self.H_shape,  1.0)
 
     def get_W(self):
+        """The weights (exposures) as a torch tensor: one row per sample, rows sum to 1."""
         return self.W_trans(self.W)
 
     def get_H(self):
+        """The signatures as a torch tensor: one row per signature, rows sum to 1.
+
+        If the signatures were given (predict mode), these are returned unchanged.
+        """
         if self.predict:
             return self.H
         else:
@@ -56,17 +65,41 @@ class baseNMF(nn.Module):
         else:
             return torch.tensor(0.0, device=self.device)
 
-    def fit(self, n_epochs=DEFAULT_EPOCHS, logfile=None, lr=DEFAULT_LR, restarts=DEFAULT_RESTARTS, loss=DEFAULT_LOSS,
-            weighted_loss=False, min_lr_rate=DEFAULT_MIN_LR, lr_decrease_factor=DEFAULT_LR_FACTOR,
-            n_epochs_restart=DEFAULT_RESTART_EPOCHS, tol=DEFAULT_TOL, check_every=DEFAULT_CHECK_EVERY, vrgrid=False):
-        """Fit the model.
+    def fit(self, n_epochs: int = DEFAULT_EPOCHS, logfile: TextIO | None = None, lr: float = DEFAULT_LR,
+            restarts: int = DEFAULT_RESTARTS, loss: str = DEFAULT_LOSS, weighted_loss: bool = False,
+            min_lr_rate: float = DEFAULT_MIN_LR, lr_decrease_factor: float = DEFAULT_LR_FACTOR,
+            n_epochs_restart: int = DEFAULT_RESTART_EPOCHS, tol: float = DEFAULT_TOL,
+            check_every: int = DEFAULT_CHECK_EVERY, vrgrid: bool = False) -> tuple:
+        """Fit the model with the Adam optimizer.
 
-        Runs `restarts` random starts of at most `n_epochs_restart` epochs each and then a
-        final run of at most `n_epochs` epochs from the best start. A run stops early once no
-        fitted value changes by more than `tol` over `check_every` epochs (`tol=0` disables this).
-        The defaults are the same as those of the `batch-nmf` command line tool.
+        Runs `restarts` random starts of at most `n_epochs_restart` epochs each, and then a
+        final run of at most `n_epochs` epochs that continues from the best start. The learning
+        rate is multiplied by `lr_decrease_factor` whenever the loss has not improved for 1000
+        epochs. A run stops at its maximum number of epochs, when the learning rate falls below
+        `min_lr_rate`, or when no fitted value has changed by more than `tol` over the last
+        `check_every` epochs. The defaults are the same as those of the `batch-nmf` command line
+        tool. Call `torch.manual_seed` before creating the model to make a fit repeatable.
 
-        `vrgrid=True` (EXPERIMENTAL) chooses the volume regularization by a grid search, see `fit_grid`.
+        Args:
+            n_epochs: Maximum number of epochs of the final run.
+            logfile: Open text file for the training log (tab-separated, one row every 5000
+                epochs and at the end of each run), or None.
+            lr: Initial learning rate.
+            restarts: Number of random starts before the final run.
+            loss: `'kullback-leibler'` or `'frobenius'`.
+            weighted_loss: Weight the loss so that every batch contributes equally.
+            min_lr_rate: A run stops when the learning rate falls below this.
+            lr_decrease_factor: Factor applied to the learning rate when the loss stops improving.
+            n_epochs_restart: Maximum number of epochs of each random start.
+            tol: Convergence tolerance (0 turns the convergence check off). Changes are absolute
+                for values up to 1 and relative for larger values.
+            check_every: Number of epochs between convergence checks.
+            vrgrid: EXPERIMENTAL. Choose the volume regularization by a grid search (see `fit_grid`).
+
+        Returns:
+            A tuple `(parameters, loss, loss_without_penalty, penalty)` for the best state found:
+                `parameters` as returned by `get_parameters` (for example `(W, H, F)` for bNMF),
+                the loss with and without the regularization penalties, and the penalty.
         """
         options = dict(n_epochs=n_epochs, logfile=logfile, lr=lr, restarts=restarts, loss=loss,
                        weighted_loss=weighted_loss, min_lr_rate=min_lr_rate, lr_decrease_factor=lr_decrease_factor,

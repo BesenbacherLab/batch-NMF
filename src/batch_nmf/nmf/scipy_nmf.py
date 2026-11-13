@@ -1,10 +1,24 @@
+import numpy as np
 from sklearn.decomposition import NMF
 
-def fit_scipy_nmf(input_matrix, n_components, n_restarts=10, beta_loss = 'frobenius', random_state=None):
-    """Best of `n_restarts` scikit-learn NMF fits from random starts.
+def fit_scipy_nmf(input_matrix: np.ndarray, n_components: int, n_restarts: int = 10, beta_loss: str = 'frobenius',
+                  random_state: int | None = None) -> tuple[float, np.ndarray, np.ndarray]:
+    """Standard NMF fitted with scikit-learn: the best of `n_restarts` random starts.
 
-    `random_state` (an int) seeds the starts: restart i uses `random_state + i`. With None every
-    run differs.
+    Uses `sklearn.decomposition.NMF` with multiplicative updates. This is `--method scipy` in
+    the command line tool.
+
+    Args:
+        input_matrix: Input matrix with one row per sample.
+        n_components: Number of signatures.
+        n_restarts: Number of random starts; the fit with the lowest reconstruction error is kept.
+        beta_loss: `'frobenius'` or `'kullback-leibler'`.
+        random_state: Seed for the random starts (start i uses `random_state + i`), or None.
+
+    Returns:
+        A tuple `(error, W, H)`: the reconstruction error and the weights and signatures. As
+            in scikit-learn, the scale of each signature is not fixed: the rows of `H` need not
+            sum to 1.
     """
     minModel = None
     minErr = 1e100

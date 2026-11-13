@@ -1,16 +1,36 @@
+"""Reading and writing the input and output files of batch-nmf."""
+
 import re
 
 import pandas as pd
 import numpy as np
 
 def print_tsv(A, filename, row_names, col_names, index_name):
+    """Write matrix `A` with row and column names to a TSV file (nothing if `filename` is None)."""
     if not filename is None:
         df = pd.DataFrame(A, columns = col_names, index=row_names)
         if not row_names is None:
             df.index.name = index_name
         df.to_csv(filename, sep = "\t")
 
-def read_batch_file(fname, sample_ids):
+def read_batch_file(fname: str, sample_ids: list[str] | pd.Index) -> tuple[np.ndarray, list[str]]:
+    """Read which batch each sample belongs to.
+
+    The file has two columns separated by whitespace and no header: sample id and batch id.
+    Samples that are not in `sample_ids` are ignored.
+
+    Args:
+        fname: Path of the batch file.
+        sample_ids: The samples (rows of the input matrix), in order.
+
+    Returns:
+        A tuple `(B, batch_ids)`. `B` is a one-hot matrix with a row per sample and a column per
+            batch, in the order in which the batches first appear in the file; `batch_ids` are
+            the batch names in that order. For bNMF, the first batch is the reference batch.
+
+    Raises:
+        AssertionError: If a sample in `sample_ids` is missing from the file.
+    """
     batch2num = {}
     n_batches = 0
     sample2batchnum = {}
@@ -36,7 +56,19 @@ def read_batch_file(fname, sample_ids):
     return A, batch_ids
 
 
-def read_matrix(fname):
+def read_matrix(fname: str) -> tuple[np.ndarray, pd.Index, pd.Index]:
+    """Read a matrix with row and column names, such as the fragment length counts.
+
+    Rows are samples and columns are fragment lengths. The first row holds the column names
+    and the first column the sample names.
+
+    Args:
+        fname: Path of a tab-separated (`.tsv`) or comma-separated (`.csv`) file.
+
+    Returns:
+        A tuple `(matrix, row_names, col_names)`: the values as a float numpy array, and the
+            row and column names.
+    """
     row_names = None
     col_names = None
     if fname.endswith('.tsv'):
@@ -54,10 +86,10 @@ def read_matrix(fname):
     return matrix, row_names, col_names
 
 
-def get_fragment_lengths(col_names, min_length=None):
+def get_fragment_lengths(col_names: list[str] | pd.Index, min_length: int | None = None) -> np.ndarray:
     """Return the fragment length of each column of the input matrix.
 
-    Arguments:
+    Args:
         col_names: Column names of the input matrix.
         min_length: If given, the columns are taken to be the consecutive lengths
             min_length, min_length+1, ... Otherwise each length is read from the

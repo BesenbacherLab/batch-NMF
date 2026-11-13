@@ -49,13 +49,13 @@ def get_parser():
                         help='Output TSV file with sample exposures.')
     parser.add_argument('--batch_file', type = str, required=False,
                         help='TSV file with sample to batch mapping. '
-                        'The first column is sample id, the second column is batch id.' \
+                        'The first column is sample id, the second column is batch id. ' \
                         'Required for batch NMF and sigmoid filter NMF. ')
     parser.add_argument('--filter_file', type = str, required=False,
                         help='Output TSV file with batch filter. '
                         'This file is only created when batch NMF or sigmoid filter NMF is used. ')
     parser.add_argument('--pseudo_count', type=float, default = 1.0,
-                        help='Pseudo count to be added to the input matrix before normalizing it so rows sum to 1.' \
+                        help='Pseudo count to be added to the input matrix before normalizing it so rows sum to 1. ' \
                         'Default is 1.0. If the matrix is already normalized, set this to 0.0.')
     
     parser.add_argument('--method', type=str, default = 'bNMF',
@@ -98,14 +98,16 @@ def get_parser():
                         help='(bNMF only) Penalty that keeps the row sums of the unnormalised reconstruction close '
                         'to 1, which fixes the overall level of each bNMF filter (otherwise not determined by '
                         'the data). Has no effect for sfNMF. Default is -1 (off).')
-    parser.add_argument('--volume_regularization', type=float, default=-1)
+    parser.add_argument('--volume_regularization', type=float, default=-1,
+                        help='If positive, the strength of a penalty on the volume of the signatures, '
+                        'log det(H H^T + I). Default is -1 (off).')
     parser.add_argument('--min_length', type=int, default=None,
                         help='(sfNMF only) Fragment length of the first column of the input matrix; '
                         'the columns are then assumed to be consecutive lengths. '
                         'By default the length of each column is read from the number at the end '
                         'of its name (e.g. "length_100" -> 100).')
     parser.add_argument('--all_separate_batch', action='store_true',
-                        help = 'Treat all samples as seperate batches.')
+                        help = 'Treat all samples as separate batches.')
     # argparse.FileType is deprecated since Python 3.14 (PendingDeprecationWarning),
     # so take a path and open the file ourselves in main().
     parser.add_argument('--logfile', type=str, default=None,

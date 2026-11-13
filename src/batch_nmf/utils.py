@@ -8,20 +8,27 @@ from copy import deepcopy
 MAX_SD = 2
 
 # Default fitting options, shared by the Python API (baseNMF.fit, train_model,
-# get_best_model) and the command line tool.
+# get_best_model) and the command line tool. The epoch counts are upper limits: a run
+# stops earlier once no fitted value changes by more than DEFAULT_TOL over
+# DEFAULT_CHECK_EVERY epochs (see get_best_model).
 DEFAULT_LOSS = 'kullback-leibler'
-DEFAULT_RESTARTS = 4        # random restarts before the final run
-DEFAULT_LR = 0.5            # initial learning rate (Adam)
-DEFAULT_LR_FACTOR = 0.8     # factor applied to the learning rate when the loss stops improving
-DEFAULT_MIN_LR = 1e-4       # a run stops when the learning rate falls below this
-
-# Convergence-based stopping (see get_best_model). The epoch counts are upper limits;
-# a run stops earlier once no fitted value changes by more than DEFAULT_TOL over
-# DEFAULT_CHECK_EVERY epochs.
-DEFAULT_EPOCHS = 50000           # final run
-DEFAULT_RESTART_EPOCHS = 40000   # each restart
+"""Loss function (`--loss`)."""
+DEFAULT_RESTARTS = 4
+"""Number of random starts before the final run (`--n_restarts`)."""
+DEFAULT_LR = 0.5
+"""Initial learning rate of the Adam optimizer (`--learning_rate`)."""
+DEFAULT_LR_FACTOR = 0.8
+"""Factor applied to the learning rate when the loss has not improved for 1000 epochs (`--lr_decrease_factor`)."""
+DEFAULT_MIN_LR = 1e-4
+"""A run stops when the learning rate falls below this (`--min_learning_rate`)."""
+DEFAULT_EPOCHS = 50000
+"""Maximum number of epochs of the final run (`--n_epochs`)."""
+DEFAULT_RESTART_EPOCHS = 40000
+"""Maximum number of epochs of each random start (`--n_epochs_restart`)."""
 DEFAULT_TOL = 1e-4
+"""Convergence tolerance (`--tol`)."""
 DEFAULT_CHECK_EVERY = 1000
+"""Number of epochs between convergence checks."""
 
 # Losses within this relative distance of the best loss count as ties (floating-point noise).
 # On a tie the best state is replaced by the newer one. Without this, a run that reaches the

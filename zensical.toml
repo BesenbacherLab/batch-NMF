@@ -7,10 +7,11 @@ repo_url = "https://github.com/BesenbacherLab/batch-NMF"
 repo_name = "BesenbacherLab/batch-NMF"
 copyright = "Copyright &copy; 2026 Søren Besenbacher"
 extra_css = ["css/apidocs.css"]
-extra_javascript = ["js/feedback.js"]
 nav = [
   { "Home" = [
     { "Overview" = "index.md" },
+    { "Command line" = "cli.md" },
+    { "Python usage" = "python.md" },
     { "Credits" = "credits.md" },
     { "License" = "license.md" },
   ] },
@@ -21,7 +22,6 @@ nav = [
 # Theme configuration
 # ----------------------------------------------------------------------------
 [project.theme]
-custom_dir = "docs/.overrides"
 language = "en"
 features = [
     "announce.dismiss",
@@ -73,21 +73,6 @@ toggle.name = "Switch to system preference"
 [[project.extra.social]]
 icon = "fontawesome/brands/github"
 link = "https://github.com/besenbacher"
-
-[project.extra.analytics.feedback]
-title = "Was this page helpful?"
-
-[[project.extra.analytics.feedback.ratings]]
-icon = "material/emoticon-happy-outline"
-name = "This page was helpful"
-data = 1
-note = "Thank you for your feedback!"
-
-[[project.extra.analytics.feedback.ratings]]
-icon = "material/emoticon-sad-outline"
-name = "This page could be improved"
-data = 0
-note = "Let us know how we can improve this page."
 
 # ----------------------------------------------------------------------------
 # Markdown extensions configuration
@@ -144,8 +129,8 @@ backlinks = "tree"
 docstring_options = { "ignore_init_summary" = true }
 docstring_section_style = "list"
 filters = "public"
-heading_level = 1
-inherited_members = true
+heading_level = 3
+inherited_members = false
 merge_init_into_class = true
 parameter_headings = true
 separate_signature = true
@@ -153,6 +138,7 @@ show_root_heading = true
 show_root_full_path = false
 show_signature_annotations = true
 show_source = true
+members_order = "source"
 show_symbol_type_heading = true
 show_symbol_type_toc = true
 signature_crossrefs = true
