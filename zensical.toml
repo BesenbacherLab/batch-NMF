@@ -1,25 +1,20 @@
 [project]
 site_name = "batch-NMF"
-site_description = "pytorch implementation of NMF extentions that incorporate batch effects including Batch NMF (bNMF) and Sigmoid Filter NMF (sfNMF)."
+site_description = "PyTorch implementation of NMF extensions that model batch effects: Batch NMF (bNMF) and Sigmoid Filter NMF (sfNMF)."
 site_author = "Søren Besenbacher"
 site_url = "https://BesenbacherLab.github.io/batch-nmf"
-repo_url = "https://github.com/BesenbacherLab/batch-nmf"
-repo_name = "BesenbacherLab/batch-nmf"
+repo_url = "https://github.com/BesenbacherLab/batch-NMF"
+repo_name = "BesenbacherLab/batch-NMF"
 copyright = "Copyright &copy; 2026 Søren Besenbacher"
 extra_css = ["css/apidocs.css"]
 extra_javascript = ["js/feedback.js"]
 nav = [
   { "Home" = [
     { "Overview" = "index.md" },
-    { "Changelog" = "changelog.md" },
     { "Credits" = "credits.md" },
     { "License" = "license.md" },
   ] },
   { "API reference" = "reference/api.md" },
-  { "Development" = [
-    { "Contributing" = "contributing.md" },
-    { "Code of Conduct" = "code_of_conduct.md" },
-  ] },
 ]
 
 # ----------------------------------------------------------------------------
@@ -78,18 +73,6 @@ toggle.name = "Switch to system preference"
 [[project.extra.social]]
 icon = "fontawesome/brands/github"
 link = "https://github.com/besenbacher"
-
-[[project.extra.social]]
-icon = "fontawesome/brands/twitter"
-link = "https://twitter.com/pawamoy"
-
-[[project.extra.social]]
-icon = "fontawesome/brands/gitter"
-link = "https://gitter.im/batch-nmf/community"
-
-[[project.extra.social]]
-icon = "fontawesome/brands/python"
-link = "https://pypi.org/project/batch-nmf/"
 
 [project.extra.analytics.feedback]
 title = "Was this page helpful?"
