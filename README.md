@@ -45,6 +45,15 @@ batch-nmf -h
 
 The program has two main commands "fit" and "predict". "fit" is used to learn both a set of signatures and their weights from an input matrix. "predict" uses a known set of signatures and infers their weight from the input matrix.
 
+`--method` chooses the model:
+
+- `bNMF` (the default): batch NMF.
+- `sfNMF`: sigmoid filter NMF.
+- `adam`: standard NMF without batch effects, fitted with the Adam optimizer like bNMF and sfNMF.
+- `scipy`: standard NMF without batch effects, fitted with scikit-learn's multiplicative updates.
+
+bNMF and sfNMF need to know which batch each sample comes from: give `--batch_file`, or `--all_separate_batch` to treat every sample as its own batch. `adam` and `scipy` use neither.
+
 The example data are in the `test_data` directory of the repository. To try them, clone the repository and go to its directory:
 ```
 git clone https://github.com/BesenbacherLab/batch-NMF.git

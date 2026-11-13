@@ -7,7 +7,10 @@ from batch_nmf.nmf.plain import plainNMF
 from batch_nmf.nmf.batch import batchNMF
 from batch_nmf.nmf.sigmoid_filter import sigmoidfilterNMF
 from batch_nmf.nmf.scipy_nmf import fit_scipy_nmf
-from batch_nmf.utils import DEFAULT_TOL, DEFAULT_CHECK_EVERY
+from batch_nmf.utils import (
+    DEFAULT_EPOCHS, DEFAULT_RESTART_EPOCHS, DEFAULT_RESTARTS, DEFAULT_LR, DEFAULT_LR_FACTOR, DEFAULT_MIN_LR,
+    DEFAULT_LOSS, DEFAULT_TOL, DEFAULT_CHECK_EVERY,
+)
 from sklearn.decomposition import non_negative_factorization
 import numpy as np
 import torch
@@ -22,7 +25,7 @@ def get_parser():
     parser = argparse.ArgumentParser(
         prog="batch-nmf",
         description='''
-        pytorch implementation of NMF extentions that incorporate batch effects including Batch NMF(bNMF) and Sigmoid Filter NMF (sfNMF).
+        PyTorch implementation of NMF extensions that model batch effects: Batch NMF (bNMF) and Sigmoid Filter NMF (sfNMF).
         ''')
 
     parser.add_argument('command', type=str, choices= ['fit', 'predict'])
@@ -56,23 +59,33 @@ def get_parser():
                         'Default is 1.0. If the matrix is already normalized, set this to 0.0.')
     
     parser.add_argument('--method', type=str, default = 'bNMF',
-                        help='which NMF version should be used',
-                        choices=['bNMF', 'sfNMF', 'scipy'])
-    parser.add_argument('--n_epochs', type=int, default = 50000,
+                        help='Which NMF version to use: bNMF (batch NMF), sfNMF (sigmoid filter NMF), '
+                        'adam (standard NMF without batch effects, fitted with the Adam optimizer like bNMF and sfNMF) '
+                        "or scipy (standard NMF fitted with scikit-learn's multiplicative updates). "
+                        'bNMF and sfNMF need --batch_file or --all_separate_batch; adam and scipy use neither. '
+                        'Default is bNMF.',
+                        choices=['bNMF', 'sfNMF', 'adam', 'scipy'])
+    parser.add_argument('--n_epochs', type=int, default = DEFAULT_EPOCHS,
                         help='Maximum number of epochs in the final run. The final run continues from the best restart, '
-                        'at the learning rate where that restart stopped. Default is 50000.')
-    parser.add_argument('--n_epochs_restart', type=int, default = 40000,
-                        help='Maximum number of epochs in each of the --n_restarts random restarts. Default is 40000.')
+                        f'at the learning rate where that restart stopped. Default is {DEFAULT_EPOCHS}.')
+    parser.add_argument('--n_epochs_restart', type=int, default = DEFAULT_RESTART_EPOCHS,
+                        help='Maximum number of epochs in each of the --n_restarts random restarts. '
+                        f'Default is {DEFAULT_RESTART_EPOCHS}.')
     parser.add_argument('--tol', type=float, default = DEFAULT_TOL,
                         help='Convergence tolerance. A run stops before its maximum number of epochs when no exposure, '
                         'signature or filter value has changed by more than TOL (relative change for values above 1) '
                         f'over the last {DEFAULT_CHECK_EVERY} epochs. Set to 0 to turn this check off. '
                         f'Default is {DEFAULT_TOL}.')
-    parser.add_argument('--learning_rate', type=float, default = 0.5)
-    parser.add_argument('--min_learning_rate', type=float, default = 1e-4)
-    parser.add_argument('--lr_decrease_factor', type=float, default = 0.80)
-    parser.add_argument('--n_restarts', type=int, default = 4,
-                        help='Number of random restarts; the best one is refined in the final run. Default is 4.')
+    parser.add_argument('--learning_rate', type=float, default = DEFAULT_LR,
+                        help=f'Initial learning rate of the Adam optimizer. Default is {DEFAULT_LR}.')
+    parser.add_argument('--min_learning_rate', type=float, default = DEFAULT_MIN_LR,
+                        help=f'A run stops when the learning rate falls below this. Default is {DEFAULT_MIN_LR}.')
+    parser.add_argument('--lr_decrease_factor', type=float, default = DEFAULT_LR_FACTOR,
+                        help='Factor applied to the learning rate when the loss has not improved for 1000 epochs. '
+                        f'Default is {DEFAULT_LR_FACTOR}.')
+    parser.add_argument('--n_restarts', type=int, default = DEFAULT_RESTARTS,
+                        help='Number of random restarts; the best one is refined in the final run. '
+                        f'Default is {DEFAULT_RESTARTS}.')
     parser.add_argument('--seed', type=int, default = None,
                         help='Seed for the random initialisations, so that a run can be repeated exactly '
                         '(same input, options, software versions and number of CPU threads). '
@@ -81,7 +94,10 @@ def get_parser():
                         help='(bNMF only) Penalty on differences between the filter values of neighbouring '
                         'fragment lengths, which makes the bNMF filters smoother. Has no effect for sfNMF. '
                         'Default is -1 (off).')
-    parser.add_argument('--scaler_regularization', type=float, default=-1)
+    parser.add_argument('--scaler_regularization', type=float, default=-1,
+                        help='(bNMF only) Penalty that keeps the row sums of the unnormalised reconstruction close '
+                        'to 1, which fixes the overall level of each bNMF filter (otherwise not determined by '
+                        'the data). Has no effect for sfNMF. Default is -1 (off).')
     parser.add_argument('--volume_regularization', type=float, default=-1)
     parser.add_argument('--min_length', type=int, default=None,
                         help='(sfNMF only) Fragment length of the first column of the input matrix; '
@@ -94,14 +110,15 @@ def get_parser():
     # so take a path and open the file ourselves in main().
     parser.add_argument('--logfile', type=str, default=None,
                         help='Optional output file for training progress.')
-    parser.add_argument('--loss', type=str, default='kullback-leibler',
+    parser.add_argument('--loss', type=str, default=DEFAULT_LOSS,
                         choices = ['frobenius', 'kullback-leibler'],
-                        help='Loss function to be used. Default is kullback-leibler divergence.')
+                        help=f'Loss function to be used. Default is {DEFAULT_LOSS}.')
     parser.add_argument('--weighted_loss', action='store_true',
                         help = 'Weight the loss so that each batch contributes equally '
                         '(samples in small batches get higher weight).')
     parser.add_argument('--vrgrid', action='store_true',
-                            help = '(EXPERIMENTAL) Use grid search to set best volume regularization parameter')
+                        help='(EXPERIMENTAL, not tested) Choose the volume regularization by a grid search '
+                        'instead of using --volume_regularization. fit only; not used by --method scipy.')
 
     return parser
 
@@ -111,7 +128,7 @@ def main(args = None):
     """
     Run the main program.
 
-    This function is executed when you type `pytorch-nmf` or `python -m pytorch_nmf`.
+    This function is executed when you type `batch-nmf` or `python -m batch_nmf`.
 
     Arguments:
         args: Arguments passed from the command line.
@@ -120,12 +137,6 @@ def main(args = None):
         An exit code.
     """
     parser = get_parser()
-    #print(args)
-    #if args is None or args == []:
-    #    print("Use --help to see available options.")
-    #    parser.print_help()
-    #    return 0
-
     opts = parser.parse_args(args=args)
     print(opts)
     if opts.command is None:
@@ -137,6 +148,53 @@ def main(args = None):
     with open(opts.logfile, "w", encoding="utf-8") as logfile:
         opts.logfile = logfile
         return _run(opts)
+
+
+# Standard NMF without batch effects (no --batch_file).
+PLAIN_METHODS = ('adam', 'scipy')
+
+
+def _check_no_batches(opts):
+    assert opts.batch_file is None and not opts.all_separate_batch, \
+        f"--batch_file and --all_separate_batch can't be used with --method {opts.method}, which has no batch effects"
+
+
+def _batch_matrix(opts, sample_names):
+    """One-hot matrix of the batch of each sample, and the batch names (bNMF and sfNMF)."""
+    if opts.all_separate_batch:
+        assert opts.batch_file is None, "--batch_file should not be supplied when --all_separate_batch is set"
+        return np.identity(len(sample_names)), sample_names
+    assert opts.batch_file is not None, f"--method {opts.method} needs --batch_file or --all_separate_batch"
+    return read_batch_file(opts.batch_file, sample_names)
+
+
+def _batch_model(opts, input_matrix, batch_matrix, n_signatures, col_names, H=None):
+    """The bNMF or sfNMF model; with signatures H given, only the weights and filters are fitted."""
+    regularization = dict(
+        filter_regularization=opts.filter_regularization,
+        scaler_regularization=opts.scaler_regularization,
+        volume_regularization=opts.volume_regularization,
+    )
+    if opts.method == 'bNMF':
+        return batchNMF(input_matrix, batch_matrix, n_signatures, H, **regularization)
+    return sigmoidfilterNMF(input_matrix, batch_matrix, n_signatures, H,
+                            lengths=get_fragment_lengths(col_names, opts.min_length), **regularization)
+
+
+def _fit_options(opts):
+    """Keyword arguments for model.fit from the command line options."""
+    return dict(
+        n_epochs=opts.n_epochs,
+        logfile=opts.logfile,
+        lr=opts.learning_rate,
+        restarts=opts.n_restarts,
+        loss=opts.loss,
+        weighted_loss=opts.weighted_loss,
+        min_lr_rate=opts.min_learning_rate,
+        lr_decrease_factor=opts.lr_decrease_factor,
+        n_epochs_restart=opts.n_epochs_restart,
+        tol=opts.tol,
+    )
 
 
 def _run(opts):
@@ -161,75 +219,22 @@ def _run(opts):
     if opts.command == 'fit':
         sig_names = [f'Sig{i+1}' for i in range(opts.n_signatures)]
 
-        if opts.batch_file is None and not opts.all_separate_batch:
-            assert opts.method == 'scipy', "batch_file is required unless --method=scipy or --all_separate_batch option is set"
-            print("Fitting plain NMF using scipy...")
-            loss, W_est, H_est = fit_scipy_nmf(input_matrix, opts.n_signatures, opts.n_restarts, beta_loss=opts.loss,
-                                               random_state=opts.seed)
-        else:
-            assert opts.method != 'scipy', "--batch_file or --all_separate_batch option should not be set when method is scipy"
-            if opts.all_separate_batch:
-                assert opts.batch_file is None, "batch_file should not be supplied when --all_separate_batch option is set"
-                batch_matrix = np.identity(len(sample_names))
-                batch_names = sample_names
+        if opts.method in PLAIN_METHODS:
+            _check_no_batches(opts)
+            if opts.method == 'scipy':
+                print("Fitting plain NMF using scipy...")
+                loss, W_est, H_est = fit_scipy_nmf(input_matrix, opts.n_signatures, opts.n_restarts, beta_loss=opts.loss,
+                                                   random_state=opts.seed)
             else:
-                batch_matrix, batch_names = read_batch_file(opts.batch_file, sample_names)
-
-            if opts.method == 'bNMF':
-                print("Fitting batch NMF...")
-
-                m = batchNMF(
-                    input_matrix, 
-                    batch_matrix, 
-                    opts.n_signatures,
-                    filter_regularization = opts.filter_regularization, 
-                    scaler_regularization = opts.scaler_regularization,
-                    volume_regularization = opts.volume_regularization,
-                    )   
-                res, loss, loss_np, penalty = m.fit(
-                    opts.n_epochs, 
-                    logfile = opts.logfile, 
-                    lr = opts.learning_rate,
-                    restarts = opts.n_restarts,
-                    vrgrid = opts.vrgrid,
-                    loss = opts.loss,
-                    weighted_loss = opts.weighted_loss,
-                    min_lr_rate = opts.min_learning_rate,
-                    lr_decrease_factor = opts.lr_decrease_factor,
-                    n_epochs_restart = opts.n_epochs_restart,
-                    tol = opts.tol,
-                    )
-                W_est, H_est, F_est = res
-                print_tsv(F_est, opts.filter_file, batch_names, col_names, "batch_id")
-                    
-            elif opts.method =='sfNMF':
-                print("Fitting sigmoid filter NMF...")
-
-                m = sigmoidfilterNMF(
-                    input_matrix, 
-                    batch_matrix, 
-                    opts.n_signatures,
-                    filter_regularization = opts.filter_regularization, 
-                    scaler_regularization = opts.scaler_regularization,
-                    volume_regularization = opts.volume_regularization,
-                    lengths = get_fragment_lengths(col_names, opts.min_length),
-                    )   
-                res, loss, loss_np, penalty = m.fit(
-                    opts.n_epochs, 
-                    logfile = opts.logfile, 
-                    lr = opts.learning_rate,
-                    restarts = opts.n_restarts,
-                    vrgrid = opts.vrgrid,
-                    loss = opts.loss,
-                    weighted_loss = opts.weighted_loss,
-                    min_lr_rate = opts.min_learning_rate,
-                    lr_decrease_factor = opts.lr_decrease_factor,
-                    n_epochs_restart = opts.n_epochs_restart,
-                    tol = opts.tol,
-                    )
-                W_est, H_est, F_est = res
-                print_tsv(F_est, opts.filter_file, batch_names, col_names, "batch_id")
-
+                print("Fitting plain NMF using Adam...")
+                m = plainNMF(input_matrix, opts.n_signatures, volume_regularization=opts.volume_regularization)
+                (W_est, H_est), loss, loss_np, penalty = m.fit(**_fit_options(opts), vrgrid=opts.vrgrid)
+        else:
+            batch_matrix, batch_names = _batch_matrix(opts, sample_names)
+            print("Fitting batch NMF..." if opts.method == 'bNMF' else "Fitting sigmoid filter NMF...")
+            m = _batch_model(opts, input_matrix, batch_matrix, opts.n_signatures, col_names)
+            (W_est, H_est, F_est), loss, loss_np, penalty = m.fit(**_fit_options(opts), vrgrid=opts.vrgrid)
+            print_tsv(F_est, opts.filter_file, batch_names, col_names, "batch_id")
 
         W_est = W_est/W_est.sum(1, keepdims=True)
         print_tsv(W_est, opts.exposure_file, sample_names, sig_names, "sample_id")
@@ -245,73 +250,19 @@ def _run(opts):
         
         n_signatures = len(sig_names)
 
-        if opts.batch_file is None and not opts.all_separate_batch:
-            assert opts.method == 'scipy', "batch_file is required unless --method=scipy or --all_separate_batch option is set"
-            W_est, H_est, n_iter = non_negative_factorization(input_matrix, H=signature_matrix, update_H=False, n_components=n_signatures, tol=1e-7, max_iter=1000000, init="random", beta_loss=opts.loss, solver='mu', random_state=opts.seed)
-            loss = -1
-        else:
-            assert opts.method != 'scipy', "--batch_file or --all_separate_batch option should not be set when method is scipy"
-            if opts.all_separate_batch:
-                assert opts.batch_file is None, "batch_file should not be supplied when --all_separate_batch option is set"
-
-                batch_matrix = np.identity(len(sample_names))
-                batch_names = sample_names
+        if opts.method in PLAIN_METHODS:
+            _check_no_batches(opts)
+            if opts.method == 'scipy':
+                W_est, _, _ = non_negative_factorization(input_matrix, H=signature_matrix, update_H=False, n_components=n_signatures, tol=1e-7, max_iter=1000000, init="random", beta_loss=opts.loss, solver='mu', random_state=opts.seed)
+                loss = -1
             else:
-                batch_matrix, batch_names = read_batch_file(opts.batch_file, sample_names)
-                
-            if opts.method == 'bNMF':
-                m = batchNMF(
-                    input_matrix, 
-                    batch_matrix, 
-                    n_signatures, 
-                    signature_matrix,
-                    filter_regularization = opts.filter_regularization, 
-                    scaler_regularization = opts.scaler_regularization,
-                    volume_regularization = opts.volume_regularization,
-                )
-                
-                res, loss, loss_np, penalty = m.fit(
-                    opts.n_epochs, 
-                    logfile = opts.logfile, 
-                    lr = opts.learning_rate,
-                    restarts = opts.n_restarts,
-                    loss = opts.loss,
-                    weighted_loss = opts.weighted_loss,
-                    min_lr_rate = opts.min_learning_rate,
-                    lr_decrease_factor = opts.lr_decrease_factor,
-                    n_epochs_restart = opts.n_epochs_restart,
-                    tol = opts.tol,
-                )
-                    
-                W_est, F_est = res
-                print_tsv(F_est, opts.filter_file, batch_names, col_names, "batch_id")
-
-            elif opts.method == 'sfNMF':
-                m = sigmoidfilterNMF(
-                    input_matrix, 
-                    batch_matrix, 
-                    n_signatures,
-                    signature_matrix,
-                    filter_regularization = opts.filter_regularization, 
-                    scaler_regularization = opts.scaler_regularization,
-                    volume_regularization = opts.volume_regularization,
-                    lengths = get_fragment_lengths(col_names, opts.min_length),
-                    )   
-                res, loss, loss_np, penalty = m.fit(
-                    opts.n_epochs, 
-                    logfile = opts.logfile, 
-                    lr = opts.learning_rate,
-                    restarts = opts.n_restarts,
-                    vrgrid = opts.vrgrid,
-                    loss = opts.loss,
-                    weighted_loss = opts.weighted_loss,
-                    min_lr_rate = opts.min_learning_rate,
-                    lr_decrease_factor = opts.lr_decrease_factor,
-                    n_epochs_restart = opts.n_epochs_restart,
-                    tol = opts.tol,
-                )
-                W_est, F_est = res
-                print_tsv(F_est, opts.filter_file, batch_names, col_names, "batch_id")
+                m = plainNMF(input_matrix, n_signatures, signature_matrix, volume_regularization=opts.volume_regularization)
+                W_est, loss, loss_np, penalty = m.fit(**_fit_options(opts))
+        else:
+            batch_matrix, batch_names = _batch_matrix(opts, sample_names)
+            m = _batch_model(opts, input_matrix, batch_matrix, n_signatures, col_names, signature_matrix)
+            (W_est, F_est), loss, loss_np, penalty = m.fit(**_fit_options(opts))
+            print_tsv(F_est, opts.filter_file, batch_names, col_names, "batch_id")
 
         W_est = W_est/W_est.sum(1, keepdims=True)
         print_tsv(W_est, opts.exposure_file, sample_names, sig_names, "sample_id")
