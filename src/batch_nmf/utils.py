@@ -21,7 +21,7 @@ DEFAULT_LR_FACTOR = 0.8
 """Factor applied to the learning rate when the loss has not improved for 1000 epochs (`--lr_decrease_factor`)."""
 DEFAULT_MIN_LR = 1e-4
 """A run stops when the learning rate falls below this (`--min_learning_rate`)."""
-DEFAULT_EPOCHS = 50000
+DEFAULT_EPOCHS = 500000
 """Maximum number of epochs of the final run (`--n_epochs`)."""
 DEFAULT_RESTART_EPOCHS = 40000
 """Maximum number of epochs of each random start (`--n_epochs_restart`)."""
