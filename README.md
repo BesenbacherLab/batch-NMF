@@ -16,7 +16,7 @@ pip install git+https://github.com/BesenbacherLab/batch-NMF.git
 
 To install a specific version, add its tag (or a commit hash) at the end:
 ```
-pip install git+https://github.com/BesenbacherLab/batch-NMF.git@0.2.0
+pip install git+https://github.com/BesenbacherLab/batch-NMF.git@1.0.0
 ```
 
 [uv](https://docs.astral.sh/uv/) and [pipx](https://pipx.pypa.io) can install it the same way, each in an environment of its own:
