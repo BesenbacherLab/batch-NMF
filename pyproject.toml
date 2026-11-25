@@ -9,7 +9,7 @@ authors = [{name = "Søren Besenbacher", email = "besenbacher@clin.au.dk"}]
 license = "MIT"
 license-files = ["LICENSE"]
 readme = "README.md"
-version = "0.2.0"
+version = "1.0.0"
 requires-python = ">=3.10"
 keywords = ["NMF", "non-negative matrix factorization", "batch effects", "cfDNA", "fragment length", "pytorch"]
 classifiers = [
